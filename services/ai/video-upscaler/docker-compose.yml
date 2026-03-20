@@ -1,0 +1,108 @@
+# ===========================================================================
+# Video Upscaler — GPU-accelerated video upscaling for SD → 1080p/4K
+# GitHub: https://github.com/davidamacey/video-upscaler
+# DockerHub: davidamacey/video-upscaler:latest
+# GPU: 0 (RTX A6000, 48 GB) — adjust device_ids as needed
+#
+# IMPORTANT: Source TV show files are mounted READ-ONLY.
+#            Never write to the source NAS path.
+#
+# Usage (interactive):
+#   make up SERVICE=ai/video-upscaler          # start container
+#   docker exec -it video-upscaler bash        # enter shell
+#   python process.py --input "/mnt/source/..." --output-dir /output
+#
+# One-shot services:
+#   docker compose run --rm download-models    # download model weights
+#   docker compose run --rm verify             # verify GPU + NAS access
+# ===========================================================================
+
+name: video-upscaler
+
+x-gpu-config: &gpu-config
+  runtime: nvidia
+  environment:
+    NVIDIA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+    NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+    CUDA_DEVICE_ORDER: PCI_BUS_ID
+
+x-volume-mounts: &volume-mounts
+  volumes:
+    - ${SOURCE_PATH:-/mnt/nas/tv_shows}:/mnt/source:ro    # READ ONLY — source videos
+    - ${OUTPUT_DIR:-/mnt/nvm/output}:/output:rw
+    - video_upscaler_weights:/weights:rw
+    - ${LOG_DIR:-./logs}:/logs:rw
+    - ${TEMP_DIR:-/tmp/video-upscaler}:/tmp/video-upscaler:rw
+
+services:
+
+  upscaler:
+    image: davidamacey/video-upscaler:${IMAGE_TAG:-latest}
+    container_name: video-upscaler
+    <<: [*gpu-config, *volume-mounts]
+    working_dir: /app
+    environment:
+      WEIGHTS_DIR: /weights
+      OUTPUT_DIR: /output
+      LOG_DIR: /logs
+      TEMP_DIR: /tmp/video-upscaler
+      PYTHONPATH: /app
+      TZ: ${TZ:-America/New_York}
+    stdin_open: true
+    tty: true
+    restart: "no"    # interactive/batch tool — not a persistent service
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+              capabilities: [gpu, compute, utility]
+        limits:
+          memory: "60g"
+    labels:
+      gpu: "true"
+    ipc: host        # required for PyTorch DataLoader shared memory
+    networks:
+      - homelab
+
+  # One-shot: download Real-ESRGAN and other model weights
+  download-models:
+    image: davidamacey/video-upscaler:${IMAGE_TAG:-latest}
+    container_name: video-upscaler-download
+    <<: [*gpu-config, *volume-mounts]
+    working_dir: /app
+    environment:
+      WEIGHTS_DIR: /weights
+      PYTHONPATH: /app
+    command: python3 scripts/download_models.py --phase 1
+    restart: "no"
+    networks:
+      - homelab
+
+  # One-shot: verify GPU access and NAS mount
+  verify:
+    image: davidamacey/video-upscaler:${IMAGE_TAG:-latest}
+    container_name: video-upscaler-verify
+    <<: [*gpu-config, *volume-mounts]
+    working_dir: /app
+    environment:
+      WEIGHTS_DIR: /weights
+      PYTHONPATH: /app
+    command: python3 scripts/test_setup.py --check-nas
+    restart: "no"
+    networks:
+      - homelab
+
+volumes:
+  video_upscaler_weights:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${WEIGHTS_HOST_DIR:-/mnt/nas/appdata/video-upscaler/weights}
+
+networks:
+  homelab:
+    external: true

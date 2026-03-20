@@ -1,0 +1,42 @@
+# ===========================================================================
+# Duplicati — Backup software with web UI and cloud storage support
+# Port: 8210
+# Docs: https://duplicati.readthedocs.io
+#
+# Supports: Backblaze B2, AWS S3, Google Drive, SFTP, WebDAV, local storage.
+# Schedule automatic backups of your homelab data and NAS.
+#
+# Access the web UI at http://<server-ip>:8210 to configure backup jobs.
+# ===========================================================================
+
+services:
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: duplicati
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${DUPLICATI_PORT:-8210}:8200"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - duplicati_config:/config
+      - ${BACKUP_SOURCE_PATH:-/mnt/nas/appdata}:/source:ro    # what to back up
+      - ${BACKUP_DEST_PATH:-/mnt/nas/backups}:/backups         # local backup destination
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homelab
+
+volumes:
+  duplicati_config:
+
+networks:
+  homelab:
+    external: true

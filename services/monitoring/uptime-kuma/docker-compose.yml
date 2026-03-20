@@ -1,0 +1,38 @@
+# ===========================================================================
+# Uptime Kuma — Self-hosted monitoring and status page
+# Port: 3001
+# Docs: https://github.com/louislam/uptime-kuma
+#
+# Add all your homelab services as monitors in the UI.
+# Supports HTTP, TCP, DNS, Docker, MQTT, and more.
+# Can send alerts via ntfy, Slack, Discord, email, etc.
+# ===========================================================================
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${UPTIME_KUMA_PORT:-3001}:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro    # optional: enables Docker container monitor
+    environment:
+      TZ: ${TZ:-America/New_York}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+volumes:
+  uptime_kuma_data:
+
+networks:
+  homelab:
+    external: true

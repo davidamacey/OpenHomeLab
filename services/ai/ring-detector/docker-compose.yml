@@ -1,0 +1,117 @@
+# ===========================================================================
+# OpenRingDetector — Self-hosted AI replacement for Ring's paid detection
+# GitHub: https://github.com/davidamacey/OpenRingDetector
+#
+# What it does:
+#   - Listens to Ring motion events via Firebase push (no polling)
+#   - Runs YOLOv8 object detection + optional Gemma 3 captioning (GPU)
+#   - Matches vehicles against saved reference embeddings (pgvector)
+#   - Tracks arrivals/departures and archives video snapshots to NAS
+#   - Sends push notifications with snapshot images via ntfy
+#
+# Requires: Ring account, ntfy instance, NAS for video archive
+#
+# GPU: GPU_DEVICE_ID (default: 1) — shares GPU 1 (3080 Ti) with Immich ML
+#      or set to 0/2 for dedicated A6000
+#
+# Services:
+#   - ring-detector : Main event watcher daemon (ring-watch)
+#   - db            : PostgreSQL + pgvector for embeddings
+#
+# Optional (uncomment to enable):
+#   - ollama        : Gemma 3 4B for scene captioning
+# ===========================================================================
+
+name: ring-detector
+
+services:
+
+  db:
+    container_name: ring-db
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${RING_DB_PORT:-5433}:5432"
+    volumes:
+      - ring_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ring_internal
+      - homelab
+
+  ring-detector:
+    container_name: ring-detector
+    # Build from local source (no DockerHub image yet):
+    image: davidamacey/ring-detector:latest    # build locally first
+    # build:
+    #   context: /path/to/OpenRingDetector
+    #   dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      TZ: ${TZ:-America/New_York}
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-1}"
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/ring_snapshots:/mnt/ring_snapshots:rw    # video archive
+    command: ring-watch
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:-1}"]
+    labels:
+      gpu: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ring_internal
+      - homelab
+
+  # ---------------------------------------------------------------------------
+  # Ollama — Gemma 3 4B for scene captioning (optional)
+  # Enable: uncomment, then pull the model:
+  #   docker compose exec ollama ollama pull gemma3:4b
+  #   Add CAPTIONER_ENABLED=true and OLLAMA_URL=http://ollama:11434 to .env
+  # ---------------------------------------------------------------------------
+  # ollama:
+  #   container_name: ring-ollama
+  #   image: ollama/ollama:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11435:11434"    # 11435 to avoid conflict with other Ollama instances
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   networks:
+  #     - ring_internal
+
+volumes:
+  ring_db_data:
+  # ollama_data:
+
+networks:
+  ring_internal:
+    driver: bridge
+  homelab:
+    external: true

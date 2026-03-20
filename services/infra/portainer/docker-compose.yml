@@ -1,0 +1,39 @@
+# ===========================================================================
+# Portainer — Docker management GUI
+# Port: 9444 (HTTP), 9445 (HTTPS)
+# Docs: https://docs.portainer.io
+#
+# Security note: Portainer mounts docker.sock, giving it full Docker access.
+# Use the HTTPS endpoint (9445) with a strong password.
+# Run behind a reverse proxy with authentication for remote access.
+# ===========================================================================
+
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${PORTAINER_HTTP_PORT:-9444}:9000"
+      - "${PORTAINER_HTTPS_PORT:-9445}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homelab
+
+volumes:
+  portainer_data:
+
+networks:
+  homelab:
+    external: true

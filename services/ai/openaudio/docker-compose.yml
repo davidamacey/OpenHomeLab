@@ -1,0 +1,310 @@
+# ===========================================================================
+# OpenAudio — AI-powered audio processing: speaker diarization, separation,
+#             event detection, and cross-recording speaker tracking
+# GitHub: https://github.com/davidamacey/OpenAudio
+# DockerHub: davidamacey/openaudio-*
+#
+# Services:
+#   - frontend               : SvelteKit web UI     (port 5473)
+#   - backend                : FastAPI API server   (port 5474)
+#   - flower                 : Celery monitor       (port 5475)
+#   - postgres               : pgvector database   (port 5476)
+#   - redis                  : Queue broker        (port 5477)
+#   - minio                  : Object storage      (port 5478/5479)
+#   - celery-torch-worker    : GPU ML worker (PyAnnote, SAM Audio)
+#   - celery-sam-worker      : GPU SAM Audio source separation
+#   - celery-enhance-worker  : Audio enhancement (DeepFilterNet)
+#   - celery-cpu-worker      : CPU tasks
+#   - celery-beat            : Scheduler
+#
+# GPU: GPU_DEVICE_ID (default: 0) for torch and SAM workers
+# ===========================================================================
+
+name: openaudio
+
+services:
+
+  postgres:
+    container_name: openaudio-postgres
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - openaudio_postgres:/var/lib/postgresql/data
+    ports:
+      - "${OPENAUDIO_POSTGRES_PORT:-5476}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openaudio_internal
+      - homelab
+
+  redis:
+    container_name: openaudio-redis
+    image: redis:8.2.2-alpine3.22
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${OPENAUDIO_REDIS_PORT:-5477}:6379"
+    volumes:
+      - openaudio_redis:/data
+    command: >
+      sh -c "if [ -n \"$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass \"$REDIS_PASSWORD\";
+      else
+        redis-server;
+      fi"
+    healthcheck:
+      test: >
+        sh -c "if [ -n \"$REDIS_PASSWORD\" ]; then
+          redis-cli -a \"$REDIS_PASSWORD\" ping;
+        else
+          redis-cli ping;
+        fi"
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    networks:
+      - openaudio_internal
+
+  minio:
+    container_name: openaudio-minio
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - openaudio_minio:/data
+    ports:
+      - "${OPENAUDIO_MINIO_PORT:-5478}:9000"
+      - "${OPENAUDIO_MINIO_CONSOLE_PORT:-5479}:9001"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - openaudio_internal
+
+  backend:
+    container_name: openaudio-backend
+    image: davidamacey/openaudio-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      UPLOAD_DIR: /app/data/uploads
+      OUTPUT_DIR: /app/data/outputs
+      TEMP_DIR: /app/data/temp
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MINIO_HOST: minio
+      MINIO_PORT: "9000"
+    volumes:
+      - openaudio_data:/app/data
+    ports:
+      - "${OPENAUDIO_BACKEND_PORT:-5474}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - openaudio_internal
+      - homelab
+
+  celery-torch-worker:
+    container_name: openaudio-celery-torch-worker
+    image: davidamacey/openaudio-torch:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.core.celery worker --loglevel=info -Q gpu --concurrency=1 --pool=solo
+    environment:
+      UPLOAD_DIR: /app/data/uploads
+      OUTPUT_DIR: /app/data/outputs
+      TEMP_DIR: /app/data/temp
+      NVIDIA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      TORCH_DEVICE: cuda
+      USE_GPU: "true"
+    volumes:
+      - openaudio_data:/app/data
+      - ${MODEL_CACHE_DIR:-./models}/huggingface:/home/openaudio/.cache/huggingface
+      - ${MODEL_CACHE_DIR:-./models}/torch:/home/openaudio/.cache/torch
+      - ${MODEL_CACHE_DIR:-./models}/beats:/home/openaudio/.cache/beats
+      - ${MODEL_CACHE_DIR:-./models}/modelscope:/home/openaudio/.cache/modelscope
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+    labels:
+      gpu: "true"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - openaudio_internal
+
+  celery-sam-worker:
+    container_name: openaudio-celery-sam-worker
+    image: davidamacey/openaudio-sam:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.core.celery worker --loglevel=info -Q sam --concurrency=1 --pool=solo
+    environment:
+      UPLOAD_DIR: /app/data/uploads
+      OUTPUT_DIR: /app/data/outputs
+      TEMP_DIR: /app/data/temp
+      NVIDIA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      TORCH_DEVICE: cuda
+      USE_GPU: "true"
+    volumes:
+      - openaudio_data:/app/data
+      - ${MODEL_CACHE_DIR:-./models}/huggingface:/home/openaudio/.cache/huggingface
+      - ${MODEL_CACHE_DIR:-./models}/torch:/home/openaudio/.cache/torch
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+    labels:
+      gpu: "true"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - openaudio_internal
+
+  celery-enhance-worker:
+    container_name: openaudio-celery-enhance-worker
+    image: davidamacey/openaudio-enhance:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.core.celery worker --loglevel=info -Q enhance --concurrency=4 --max-tasks-per-child=50
+    environment:
+      UPLOAD_DIR: /app/data/uploads
+      OUTPUT_DIR: /app/data/outputs
+      TEMP_DIR: /app/data/temp
+    volumes:
+      - openaudio_data:/app/data
+      - ${MODEL_CACHE_DIR:-./models}/torch:/home/openaudio/.cache/torch
+      - ${MODEL_CACHE_DIR:-./models}/huggingface:/home/openaudio/.cache/huggingface
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - openaudio_internal
+
+  celery-cpu-worker:
+    container_name: openaudio-celery-cpu-worker
+    image: davidamacey/openaudio-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.core.celery worker --loglevel=info -Q cpu,utility,export,download,nlp --concurrency=8 --max-tasks-per-child=20
+    environment:
+      UPLOAD_DIR: /app/data/uploads
+      OUTPUT_DIR: /app/data/outputs
+      TEMP_DIR: /app/data/temp
+    volumes:
+      - openaudio_data:/app/data
+      - ${MODEL_CACHE_DIR:-./models}/huggingface:/home/openaudio/.cache/huggingface
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - openaudio_internal
+
+  celery-beat:
+    container_name: openaudio-celery-beat
+    image: davidamacey/openaudio-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.core.celery beat --loglevel=info
+    volumes:
+      - openaudio_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - openaudio_internal
+
+  frontend:
+    container_name: openaudio-frontend
+    image: davidamacey/openaudio-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${OPENAUDIO_FRONTEND_PORT:-5473}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - openaudio_internal
+      - homelab
+
+  flower:
+    container_name: openaudio-flower
+    image: davidamacey/openaudio-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: >
+      python3 -m celery -A app.core.celery flower
+      --port=5555
+      --url_prefix=${VITE_FLOWER_URL_PREFIX:-flower}
+      --persistent=True
+      --db=/app/flower-db/flower.db
+    ports:
+      - "${OPENAUDIO_FLOWER_PORT:-5475}:5555"
+    environment:
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/0"
+    volumes:
+      - openaudio_flower:/app/flower-db
+    depends_on:
+      - redis
+      - celery-torch-worker
+    networks:
+      - openaudio_internal
+      - homelab
+
+volumes:
+  openaudio_postgres:
+  openaudio_redis:
+  openaudio_minio:
+  openaudio_data:
+  openaudio_flower:
+
+networks:
+  openaudio_internal:
+    driver: bridge
+  homelab:
+    external: true

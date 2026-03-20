@@ -1,0 +1,74 @@
+# ===========================================================================
+# BookStack — Self-hosted knowledge base and wiki
+# Port: 6875
+# Docs: https://www.bookstackapp.com/docs/
+#
+# Organizes documentation in Books → Chapters → Pages.
+# Excellent for homelab runbooks, server documentation, and how-to guides.
+# ===========================================================================
+
+services:
+
+  bookstack-db:
+    image: lscr.io/linuxserver/mariadb:latest
+    container_name: bookstack-db
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-America/New_York}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bookstack}
+      MYSQL_USER: ${MYSQL_USER:-bookstack}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/bookstack/db:/config
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - bookstack_internal
+
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    container_name: bookstack
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      bookstack-db:
+        condition: service_healthy
+    ports:
+      - "${BOOKSTACK_PORT:-6875}:80"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-America/New_York}
+      APP_URL: ${BOOKSTACK_URL:-http://localhost:6875}
+      DB_HOST: bookstack-db
+      DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-bookstack}
+      DB_USERNAME: ${MYSQL_USER:-bookstack}
+      DB_PASS: ${MYSQL_PASSWORD}
+      APP_KEY: ${APP_KEY}    # generate: php artisan key:generate --show
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/bookstack/app:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - bookstack_internal
+      - homelab
+
+volumes: {}
+
+networks:
+  bookstack_internal:
+    driver: bridge
+  homelab:
+    external: true

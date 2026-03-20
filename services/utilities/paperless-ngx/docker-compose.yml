@@ -1,0 +1,90 @@
+# ===========================================================================
+# Paperless-ngx — Document management with OCR and full-text search
+# Port: 8070
+# Docs: https://docs.paperless-ngx.com
+#
+# Automatically OCRs and indexes scanned documents, PDFs, emails, and images.
+# Supports 100+ languages via Tesseract OCR.
+# ===========================================================================
+
+services:
+
+  paperless-broker:
+    image: docker.io/library/redis:7
+    container_name: paperless-broker
+    restart: unless-stopped
+    volumes:
+      - paperless_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - paperless_internal
+
+  paperless-db:
+    image: docker.io/library/postgres:17
+    container_name: paperless-db
+    restart: unless-stopped
+    volumes:
+      - paperless_db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${PAPERLESS_DBNAME:-paperless}
+      POSTGRES_USER: ${PAPERLESS_DBUSER:-paperless}
+      POSTGRES_PASSWORD: ${PAPERLESS_DBPASS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${PAPERLESS_DBNAME:-paperless} -U ${PAPERLESS_DBUSER:-paperless}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - paperless_internal
+
+  paperless-webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-ngx
+    restart: unless-stopped
+    depends_on:
+      paperless-db:
+        condition: service_healthy
+      paperless-broker:
+        condition: service_healthy
+    ports:
+      - "${PAPERLESS_PORT:-8070}:8000"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/paperless/data:/usr/src/paperless/data
+      - ${DATA_PATH:-/mnt/nas/appdata}/paperless/media:/usr/src/paperless/media
+      - ${DATA_PATH:-/mnt/nas/appdata}/paperless/export:/usr/src/paperless/export
+      - ${DATA_PATH:-/mnt/nas/appdata}/paperless/consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://paperless-broker:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBNAME: ${PAPERLESS_DBNAME:-paperless}
+      PAPERLESS_DBUSER: ${PAPERLESS_DBUSER:-paperless}
+      PAPERLESS_DBPASS: ${PAPERLESS_DBPASS}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_TIME_ZONE: ${TZ:-America/New_York}
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-eng}
+      PAPERLESS_URL: http://localhost:${PAPERLESS_PORT:-8070}
+      USERMAP_UID: ${PUID:-1000}
+      USERMAP_GID: ${PGID:-1000}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - paperless_internal
+      - homelab
+
+volumes:
+  paperless_redis:
+  paperless_db:
+
+networks:
+  paperless_internal:
+    driver: bridge
+  homelab:
+    external: true

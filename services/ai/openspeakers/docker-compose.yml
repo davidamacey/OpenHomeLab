@@ -1,0 +1,176 @@
+# ===========================================================================
+# OpenSpeakers — Unified TTS and voice cloning
+# GitHub: https://github.com/davidamacey/OpenSpeakers
+# DockerHub: davidamacey/open-speakers-*
+#
+# Models: VibeVoice, Fish Speech S2, Kokoro, Qwen3 TTS (hot-swap on GPU)
+# GPU: GPU_DEVICE_ID (default: 0) — only one model loaded at a time (hot-swap)
+# Celery worker: concurrency=1 to serialize GPU access
+#
+# Services:
+#   - frontend  : SvelteKit web UI   (port 5283)
+#   - backend   : FastAPI API        (port 5284)
+#   - worker    : Celery TTS worker  (GPU)
+#   - postgres  : Job history DB     (port 5285)
+#   - redis     : Task queue         (port 5286)
+# ===========================================================================
+
+name: openspeakers
+
+services:
+
+  postgres:
+    container_name: open_speakers-postgres
+    image: postgres:17.5-alpine
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openspeakers}
+      POSTGRES_USER: ${POSTGRES_USER:-openspeakers}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - openspeakers_postgres:/var/lib/postgresql/data
+    ports:
+      - "${OPENSPEAKERS_POSTGRES_PORT:-5285}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openspeakers}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openspeakers_internal
+      - homelab
+
+  redis:
+    container_name: open_speakers-redis
+    image: redis:8.2.2-alpine3.22
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENSPEAKERS_REDIS_PORT:-5286}:6379"
+    volumes:
+      - openspeakers_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - openspeakers_internal
+
+  backend:
+    container_name: open_speakers-backend
+    image: davidamacey/open-speakers-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${AUDIO_OUTPUT_DIR:-/mnt/nas/appdata/openspeakers/audio_output}:/app/audio_output
+    ports:
+      - "${OPENSPEAKERS_BACKEND_PORT:-5284}:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AUDIO_OUTPUT_DIR: /app/audio_output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - openspeakers_internal
+      - homelab
+
+  worker:
+    container_name: open_speakers-worker
+    image: davidamacey/open-speakers-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: >
+      celery -A app.core.celery worker
+      --loglevel=info
+      -Q tts
+      --pool=threads
+      --concurrency=1
+      --max-tasks-per-child=1000
+      --hostname tts-worker@%h
+      -E
+    volumes:
+      - ${MODEL_CACHE_DIR:-/mnt/nas/appdata/openspeakers/models}/huggingface:/home/appuser/.cache/huggingface
+      - ${MODEL_CACHE_DIR:-/mnt/nas/appdata/openspeakers/models}/torch:/home/appuser/.cache/torch
+      - ${AUDIO_OUTPUT_DIR:-/mnt/nas/appdata/openspeakers/audio_output}:/app/audio_output
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AUDIO_OUTPUT_DIR: /app/audio_output
+      GPU_DEVICE_ID: "${GPU_DEVICE_ID:-0}"
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery inspect ping -d tts-worker@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - openspeakers_internal
+
+  frontend:
+    container_name: open_speakers-frontend
+    image: davidamacey/open-speakers-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENSPEAKERS_FRONTEND_PORT:-5283}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - openspeakers_internal
+      - homelab
+
+volumes:
+  openspeakers_postgres:
+  openspeakers_redis:
+
+networks:
+  openspeakers_internal:
+    driver: bridge
+  homelab:
+    external: true

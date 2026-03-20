@@ -1,0 +1,51 @@
+# ===========================================================================
+# Vaultwarden — Self-hosted Bitwarden-compatible password manager
+# Port: 8222
+# Docs: https://github.com/dani-garcia/vaultwarden
+#
+# Compatible with all official Bitwarden clients (browser extension, mobile,
+# desktop, CLI). Much lighter than the official Bitwarden server.
+#
+# Security notes:
+# - Run behind HTTPS (nginx-proxy or Traefik) — Bitwarden clients require HTTPS
+# - Set SIGNUPS_ALLOWED=false after creating your account(s)
+# - Set a strong ADMIN_TOKEN for the /admin panel
+# ===========================================================================
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${VAULTWARDEN_PORT:-8222}:80"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/vaultwarden:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+      DOMAIN: ${VAULTWARDEN_DOMAIN:-http://localhost:8222}
+      # Admin panel token — access at /admin
+      # Generate: openssl rand -base64 48
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      # Set to false after creating your accounts
+      SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-true}
+      # Optional: Email for password reset and 2FA
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-vaultwarden@homelab.local}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

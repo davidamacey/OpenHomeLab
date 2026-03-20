@@ -1,0 +1,60 @@
+# ===========================================================================
+# Frigate — NVR with real-time AI object detection
+# Port: 5000 (web UI), 8554 (RTSP), 8555 (WebRTC)
+# GPU: 1 (RTX 3080 Ti, 12 GB) for object detection
+# Docs: https://docs.frigate.video
+#
+# Pairs well with OpenRingDetector (services/ai/ring-detector) for Ring cameras.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Create frigate.yml config at ${FRIGATE_CONFIG_PATH:-./config}/config.yml
+#      See: https://docs.frigate.video/configuration/
+#   3. docker compose up -d
+#   4. Open http://<server-ip>:5000
+#
+# RTSP camera URLs go in frigate.yml (not in this file).
+# ===========================================================================
+
+services:
+  frigate:
+    container_name: frigate
+    image: ghcr.io/blakeblackshear/frigate:${FRIGATE_VERSION:-stable}
+    restart: unless-stopped
+    privileged: true    # required for hardware device access
+    shm_size: "256mb"   # increase for many cameras (256MB per 3-4 cameras at 1080p)
+    environment:
+      TZ: ${TZ:-America/New_York}
+      FRIGATE_RTSP_PASSWORD: ${FRIGATE_RTSP_PASSWORD}    # used in config.yml as {FRIGATE_RTSP_PASSWORD}
+    volumes:
+      - ${FRIGATE_CONFIG_PATH:-./config}:/config
+      - ${NAS_PATH:-/mnt/nas}/appdata/frigate/media:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/bus/usb:/dev/bus/usb    # for Coral USB TPU (comment out if not using Coral)
+    ports:
+      - "${FRIGATE_WEB_PORT:-5000}:5000"
+      - "${FRIGATE_RTSP_PORT:-8554}:8554"
+      - "${FRIGATE_WEBRTC_PORT:-8555}:8555/tcp"
+      - "${FRIGATE_WEBRTC_PORT:-8555}:8555/udp"
+    # NVIDIA GPU hardware acceleration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_ID:-1}"]
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

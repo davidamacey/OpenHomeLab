@@ -1,0 +1,69 @@
+# ===========================================================================
+# VibeVoice — Real-time voice synthesis and cloning
+# GitHub: https://github.com/davidamacey/VibeVoice (fork)
+# Port: 8300
+# GPU: 0 (RTX A6000, 48 GB) — adjust device_ids as needed
+#
+# Models expected at ${NAS_PATH:-/mnt/nas}/models/:
+#   vibevoice/VibeVoice-Realtime-0.5B
+#   vibevoice/VibeVoice-1.5B
+#   vibevoice/VibeVoice-Large
+#   vibevoice/VibeVoice-ASR
+#   Qwen/Qwen2.5-7B
+#   speechbrain/spkrec-ecapa-voxceleb
+#   wespeaker/en/model.onnx
+#
+# NOTE: VibeVoice must be built locally from the source repo.
+# Run: docker build -t davidamacey/vibevoice:latest /path/to/VibeVoice/
+# ===========================================================================
+
+services:
+  vibevoice:
+    image: davidamacey/vibevoice:latest    # build locally first
+    container_name: vibevoice
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      TZ: ${TZ:-America/New_York}
+      NVIDIA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-0}"
+      MODEL_DEVICE: cuda
+      MODEL_PATH: /models/vibevoice/VibeVoice-Realtime-0.5B
+      MODEL_PATH_1P5B: /models/vibevoice/VibeVoice-1.5B
+      MODEL_PATH_LARGE: /models/vibevoice/VibeVoice-Large
+      MODEL_PATH_ASR: /models/vibevoice/VibeVoice-ASR
+      TOKENIZER_PATH: /models/Qwen/Qwen2.5-7B
+      ECAPA_MODEL_DIR: /models/speechbrain/spkrec-ecapa-voxceleb
+      WESPEAKER_MODEL_PATH: /models/wespeaker/en/model.onnx
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/models:/models:ro
+      - vibevoice_outputs:/app/outputs
+    ports:
+      - "${VIBEVOICE_PORT:-8300}:8000"
+    command: >
+      python -m uvicorn demo.web.app:app
+      --host 0.0.0.0 --port 8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+volumes:
+  vibevoice_outputs:
+
+networks:
+  homelab:
+    external: true

@@ -1,0 +1,67 @@
+# ===========================================================================
+# Traefik — Cloud-native reverse proxy with automatic service discovery
+# Port: 80 (HTTP), 443 (HTTPS), 8090 (dashboard)
+# Docs: https://doc.traefik.io/traefik/
+#
+# Alternative to Nginx Proxy Manager. Traefik auto-discovers services via
+# Docker labels — no restart needed when adding/removing services.
+#
+# Port conflict note: Use EITHER nginx-proxy OR traefik on ports 80/443.
+# Running both simultaneously requires different port assignments.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. touch ./acme.json && chmod 600 ./acme.json  (Let's Encrypt cert storage)
+#   3. docker compose up -d
+#   4. Access dashboard at http://<server-ip>:8090
+#
+# To add a service, add these labels to its compose file:
+#   labels:
+#     - "traefik.enable=true"
+#     - "traefik.http.routers.<name>.rule=Host(`service.your-domain.com`)"
+#     - "traefik.http.routers.<name>.entrypoints=websecure"
+#     - "traefik.http.services.<name>.loadbalancer.server.port=<container-port>"
+# ===========================================================================
+
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8090}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme.json:/acme.json           # Let's Encrypt certificate storage
+      - ./traefik.yml:/traefik.yml:ro    # static config (see example below)
+    environment:
+      TZ: ${TZ:-America/New_York}
+    command:
+      - --api.insecure=${TRAEFIK_DASHBOARD_INSECURE:-true}
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-homelab.local}`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

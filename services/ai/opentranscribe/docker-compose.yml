@@ -1,0 +1,385 @@
+# ===========================================================================
+# OpenTranscribe — AI-powered speech transcription with speaker diarization
+# GitHub: https://github.com/davidamacey/OpenTranscribe
+# DockerHub: davidamacey/opentranscribe-*
+#
+# Services:
+#   - frontend      : SvelteKit web UI      (port 5173)
+#   - backend       : FastAPI API server    (port 5174)
+#   - flower        : Celery task monitor   (port 5175)
+#   - postgres      : Database              (port 5176)
+#   - redis         : Queue broker         (port 5177)
+#   - minio         : Object storage       (port 5178/5179)
+#   - opensearch    : Full-text + vector search (port 5180)
+#   - celery-worker : GPU transcription worker
+#   - celery-*      : CPU/download/NLP/embedding workers
+#
+# GPU: GPU_DEVICE_ID (default: 0) for transcription worker
+# Models: WhisperX (large-v3-turbo), PyAnnote, sentence-transformers
+# ===========================================================================
+
+name: opentranscribe
+
+services:
+
+  postgres:
+    container_name: opentranscribe-postgres
+    image: postgres:17.5-alpine
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_connections=200
+    volumes:
+      - opentranscribe_postgres:/var/lib/postgresql/data
+    ports:
+      - "${OPENTRANSCRIBE_POSTGRES_PORT:-5176}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opentranscribe_internal
+      - homelab
+
+  redis:
+    container_name: opentranscribe-redis
+    image: redis:8.2.2-alpine3.22
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENTRANSCRIBE_REDIS_PORT:-5177}:6379"
+    volumes:
+      - opentranscribe_redis:/data
+    command: >
+      sh -c "if [ -n \"$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass \"$REDIS_PASSWORD\";
+      else
+        redis-server;
+      fi"
+    healthcheck:
+      test: >
+        sh -c "if [ -n \"$REDIS_PASSWORD\" ]; then
+          redis-cli -a \"$REDIS_PASSWORD\" ping;
+        else
+          redis-cli ping;
+        fi"
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    networks:
+      - opentranscribe_internal
+
+  minio:
+    container_name: opentranscribe-minio
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - opentranscribe_minio:/data
+    ports:
+      - "${OPENTRANSCRIBE_MINIO_PORT:-5178}:9000"
+      - "${OPENTRANSCRIBE_MINIO_CONSOLE_PORT:-5179}:9001"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - opentranscribe_internal
+
+  opensearch:
+    container_name: opentranscribe-opensearch
+    image: opensearchproject/opensearch:3.4.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms1g -Xmx1g"
+      DISABLE_SECURITY_PLUGIN: "true"
+      plugins.ml_commons.only_run_on_ml_node: "false"
+      plugins.ml_commons.native_memory_threshold: "99"
+      plugins.ml_commons.model_access_control_enabled: "false"
+      plugins.ml_commons.allow_registering_model_via_url: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opentranscribe_opensearch:/usr/share/opensearch/data
+      - ${MODEL_CACHE_DIR:-./models}/opensearch-ml:/ml-models:ro
+    ports:
+      - "${OPENTRANSCRIBE_OPENSEARCH_PORT:-5180}:9200"
+      - "${OPENTRANSCRIBE_OPENSEARCH_ADMIN_PORT:-5181}:9600"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS http://localhost:9200 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    networks:
+      - opentranscribe_internal
+
+  backend:
+    container_name: opentranscribe-backend
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ${MODEL_CACHE_DIR:-./models}/sentence-transformers:/home/appuser/.cache/sentence-transformers
+      - ${MODEL_CACHE_DIR:-./models}/nltk_data:/home/appuser/.cache/nltk_data
+    ports:
+      - "${OPENTRANSCRIBE_BACKEND_PORT:-5174}:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      MINIO_HOST: minio
+      MINIO_PORT: "9000"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: "9200"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+      - homelab
+
+  celery-worker:
+    container_name: opentranscribe-celery-worker
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery worker --loglevel=info -Q gpu --pool=threads --concurrency=1 --max-tasks-per-child=100000 --hostname gpu-transcription@%h -E
+    volumes:
+      - ${MODEL_CACHE_DIR:-./models}/huggingface:/home/appuser/.cache/huggingface
+      - ${MODEL_CACHE_DIR:-./models}/torch:/home/appuser/.cache/torch
+      - ${MODEL_CACHE_DIR:-./models}/nltk_data:/home/appuser/.cache/nltk_data
+      - ${MODEL_CACHE_DIR:-./models}/sentence-transformers:/home/appuser/.cache/sentence-transformers
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      MINIO_HOST: minio
+      MINIO_PORT: "9000"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: "9200"
+    # GPU access enabled below — adjust device_ids to match your hardware
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:-0}"]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery inspect ping -d gpu-transcription@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  celery-cpu-worker:
+    container_name: opentranscribe-celery-cpu-worker
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery worker --loglevel=info -Q cpu,utility,cloud-asr --concurrency=8 --max-tasks-per-child=20 --hostname cpu-processor@%h -E
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      MINIO_HOST: minio
+      MINIO_PORT: "9000"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: "9200"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  celery-download-worker:
+    container_name: opentranscribe-celery-download-worker
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery worker --loglevel=info -Q download --concurrency=3 --max-tasks-per-child=10 --hostname media-downloader@%h -E
+    environment:
+      POSTGRES_HOST: postgres
+      MINIO_HOST: minio
+      REDIS_HOST: redis
+      OPENSEARCH_HOST: opensearch
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  celery-nlp-worker:
+    container_name: opentranscribe-celery-nlp-worker
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery worker --loglevel=info -Q nlp,celery --concurrency=4 --max-tasks-per-child=50 --hostname ai-nlp@%h -E
+    environment:
+      POSTGRES_HOST: postgres
+      MINIO_HOST: minio
+      REDIS_HOST: redis
+      OPENSEARCH_HOST: opensearch
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  celery-embedding-worker:
+    container_name: opentranscribe-celery-embedding-worker
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery worker --loglevel=info -Q embedding --concurrency=1 --max-tasks-per-child=500 --hostname search-indexer@%h -E
+    volumes:
+      - ${MODEL_CACHE_DIR:-./models}/sentence-transformers:/home/appuser/.cache/sentence-transformers
+    environment:
+      POSTGRES_HOST: postgres
+      MINIO_HOST: minio
+      REDIS_HOST: redis
+      OPENSEARCH_HOST: opensearch
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  celery-beat:
+    container_name: opentranscribe-celery-beat
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: celery -A app.core.celery beat --loglevel=info
+    environment:
+      POSTGRES_HOST: postgres
+      MINIO_HOST: minio
+      REDIS_HOST: redis
+      OPENSEARCH_HOST: opensearch
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+
+  frontend:
+    container_name: opentranscribe-frontend
+    image: davidamacey/opentranscribe-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${OPENTRANSCRIBE_FRONTEND_PORT:-5173}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - opentranscribe_internal
+      - homelab
+
+  flower:
+    container_name: opentranscribe-flower
+    image: davidamacey/opentranscribe-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    command: >
+      python -m celery -A app.core.celery flower
+      --port=5555
+      --url_prefix=${FLOWER_URL_PREFIX:-flower}
+      --persistent=True
+      --db=/app/flower.db
+      --max_tasks=10000
+    ports:
+      - "${OPENTRANSCRIBE_FLOWER_PORT:-5175}:5555"
+    environment:
+      CELERY_BROKER_URL: "redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/0"
+      FLOWER_USER: ${FLOWER_USER:-admin}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD:-CHANGE_ME}
+    depends_on:
+      - redis
+      - celery-worker
+    volumes:
+      - opentranscribe_flower:/app
+    networks:
+      - opentranscribe_internal
+      - homelab
+
+volumes:
+  opentranscribe_postgres:
+  opentranscribe_redis:
+  opentranscribe_minio:
+  opentranscribe_opensearch:
+  opentranscribe_flower:
+
+networks:
+  opentranscribe_internal:
+    driver: bridge
+  homelab:
+    external: true
