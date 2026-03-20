@@ -1,0 +1,36 @@
+# ===========================================================================
+# Homepage — Modern, customizable application dashboard
+# Port: 3000
+# Docs: https://gethomepage.dev
+#
+# NOTE: Homepage requires YAML configuration files in the config directory.
+#       See: https://gethomepage.dev/installation/docker/
+#       Create your config directory first, then mount it below.
+# ===========================================================================
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${HOMEPAGE_PORT:-3000}:3000"
+    volumes:
+      - ${HOMEPAGE_CONFIG_PATH:-./config}:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # optional: enables Docker widget
+    environment:
+      TZ: ${TZ:-America/New_York}
+      HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_ALLOWED_HOSTS:-localhost}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

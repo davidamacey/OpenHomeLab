@@ -1,0 +1,40 @@
+# ===========================================================================
+# Stirling PDF — Self-hosted PDF toolkit
+# Port: 8080
+# Docs: https://github.com/Stirling-Tools/Stirling-PDF
+# ===========================================================================
+
+services:
+  stirling-pdf:
+    image: frooodle/s-pdf:latest
+    container_name: stirling-pdf
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${STIRLING_PORT:-8080}:8080"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      DOCKER_ENABLE_SECURITY: "false"
+      # Uncomment for additional OCR languages:
+      # INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
+    volumes:
+      # Uncomment for custom Tesseract OCR language data:
+      # - /path/to/tessdata:/usr/share/tesseract-ocr/5/tessdata
+      # - ./configs:/configs
+      # - ./customFiles:/customFiles
+      - stirling_logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/info/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+volumes:
+  stirling_logs:
+
+networks:
+  homelab:
+    external: true

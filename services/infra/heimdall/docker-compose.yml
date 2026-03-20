@@ -1,0 +1,33 @@
+# ===========================================================================
+# Heimdall — Application dashboard
+# Ports: 9000 (HTTP), 9001 (HTTPS)
+# Docs: https://heimdall.site / https://github.com/linuxserver/Heimdall
+# ===========================================================================
+
+services:
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    container_name: heimdall
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/heimdall:/config
+    ports:
+      - "${HEIMDALL_HTTP_PORT:-9000}:80"
+      - "${HEIMDALL_HTTPS_PORT:-9001}:443"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

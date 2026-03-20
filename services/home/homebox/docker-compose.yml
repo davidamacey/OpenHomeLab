@@ -1,0 +1,35 @@
+# ===========================================================================
+# Homebox — Home inventory management
+# Port: 3100
+# Docs: https://homebox.software
+# ===========================================================================
+
+services:
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:latest
+    container_name: homebox
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${HOMEBOX_PORT:-3100}:7745"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      HBOX_LOG_LEVEL: info
+      HBOX_LOG_FORMAT: text
+      HBOX_WEB_MAX_UPLOAD_SIZE: "50"
+      HBOX_OPTIONS_ALLOW_REGISTRATION: "true"
+      HBOX_OPTIONS_ALLOW_ANALYTICS: "false"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/homebox:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 -O /dev/null http://localhost:7745/api/v1/status || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

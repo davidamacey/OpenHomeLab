@@ -1,0 +1,46 @@
+# ===========================================================================
+# Nginx Proxy Manager — Reverse proxy with GUI and automatic SSL
+# Ports: 80 (HTTP), 443 (HTTPS), 81 (admin UI)
+# Docs: https://nginxproxymanager.com
+#
+# Quick start:
+#   1. docker compose up -d
+#   2. Visit http://<server-ip>:81
+#   3. Default login: admin@example.com / changeme
+#      (you will be prompted to change both on first login)
+#
+# Port conflict note: port 80/443 conflicts with nextcloud and ntfy.
+# nginx-proxy-manager is the recommended choice for a reverse proxy since
+# it will proxy all other services. Run this first, then use it to route
+# traffic to your other services (which you can then remove their port bindings).
+# ===========================================================================
+
+services:
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${NPM_HTTP_PORT:-80}:80"
+      - "${NPM_ADMIN_PORT:-81}:81"
+      - "${NPM_HTTPS_PORT:-443}:443"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:81/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+volumes:
+  npm_data:
+  npm_letsencrypt:
+
+networks:
+  homelab:
+    external: true

@@ -1,0 +1,39 @@
+# ===========================================================================
+# draw.io — Self-hosted diagramming tool
+# Ports: 8081 (HTTP), 8443 (HTTPS)
+# Docs: https://github.com/jgraph/drawio
+#
+# The PUBLIC_DNS, ORGANISATION, CITY, STATE, COUNTRY_CODE variables are used
+# to generate a self-signed TLS certificate for the HTTPS endpoint.
+# ===========================================================================
+
+services:
+  drawio:
+    image: jgraph/drawio
+    container_name: drawio
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${DRAWIO_HTTP_PORT:-8081}:8080"
+      - "${DRAWIO_HTTPS_PORT:-8443}:8443"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # Self-signed certificate fields — update these for your environment
+      PUBLIC_DNS: ${DRAWIO_DOMAIN:-your-server-ip-or-hostname}
+      ORGANISATION_UNIT: ${DRAWIO_ORG_UNIT:-IT}
+      ORGANISATION: ${DRAWIO_ORG:-HomeLab}
+      CITY: ${DRAWIO_CITY:-Your City}
+      STATE: ${DRAWIO_STATE:-Your State}
+      COUNTRY_CODE: ${DRAWIO_COUNTRY:-US}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
+      interval: 90s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

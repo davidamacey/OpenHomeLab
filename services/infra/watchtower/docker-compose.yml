@@ -1,0 +1,33 @@
+# ===========================================================================
+# Watchtower — Automatic container image updates
+# Docs: https://containrrr.dev/watchtower/
+#
+# Schedule: runs at 03:15 AM daily (6-field cron: sec min hour day month weekday)
+# Cleanup: removes old images after updating
+# Rolling restart: updates one container at a time
+# ===========================================================================
+
+services:
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # Optional: notify via ntfy when containers are updated
+      # WATCHTOWER_NOTIFICATIONS: shoutrrr
+      # WATCHTOWER_NOTIFICATION_URL: ntfy://your-ntfy-server/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --schedule=0 15 3 * * *   # 03:15:00 AM daily
+      - --cleanup                  # remove old images after update
+      - --rolling-restart          # update one container at a time
+      - --stop-timeout=30s         # give containers 30s to shut down gracefully
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

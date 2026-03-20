@@ -1,0 +1,61 @@
+# ===========================================================================
+# Tandoor Recipes — Self-hosted recipe manager
+# Port: 9092
+# Docs: https://docs.tandoor.dev/install/docker/
+# ===========================================================================
+#
+# Quick start:
+#   1. cp .env.example .env  (fill in SECRET_KEY and DB password)
+#   2. docker compose up -d
+#   3. Open http://<server-ip>:9092 and create your account
+
+services:
+
+  tandoor-db:
+    image: postgres:16-alpine
+    container_name: tandoor-db
+    restart: unless-stopped
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/tandoor/postgresql:/var/lib/postgresql/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tandoor} -d ${POSTGRES_DB:-tandoor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tandoor_internal
+
+  tandoor-web:
+    image: vabene1111/recipes
+    container_name: tandoor-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${TANDOOR_PORT:-9092}:80"
+    volumes:
+      - tandoor_staticfiles:/opt/recipes/staticfiles
+      - ${DATA_PATH:-/mnt/nas/appdata}/tandoor/mediafiles:/opt/recipes/mediafiles
+    depends_on:
+      tandoor-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/accounts/login/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - tandoor_internal
+      - homelab
+
+volumes:
+  tandoor_staticfiles:
+
+networks:
+  tandoor_internal:
+    driver: bridge
+  homelab:
+    external: true

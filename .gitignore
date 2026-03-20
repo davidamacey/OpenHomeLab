@@ -1,0 +1,37 @@
+# ===========================================================================
+# OpenHomeLab — .gitignore
+# ===========================================================================
+
+# --- Secrets (NEVER commit real .env files) ---
+.env
+!.env.example
+
+# --- Container data volumes ---
+**/data/
+**/volumes/
+**/postgres-data/
+**/pgdata/
+
+# --- SSL / TLS ---
+*.pem
+*.key
+*.crt
+*.csr
+letsencrypt/
+certs/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- SOPS encrypted secrets (keep .sops.yaml, ignore encrypted .env files) ---
+*.sops
+*.enc

@@ -1,0 +1,46 @@
+# ===========================================================================
+# ComfyUI — AI image generation with Flux models
+# Port: 8188
+# GPU:  0 (RTX A6000, 48 GB) — adjust device_ids as needed
+# Docs: https://github.com/comfyanonymous/ComfyUI
+# Image: https://github.com/frefrik/comfyui-flux-docker
+# ===========================================================================
+
+services:
+  comfyui:
+    image: frefrik/comfyui-flux:cu124
+    container_name: comfyui
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${COMFYUI_PORT:-8188}:8188"
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/hf_comfyui_models:/app
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CLI_ARGS: ""
+      HF_TOKEN: ${HF_TOKEN}             # Required for model downloads from HuggingFace
+      LOW_VRAM: ${LOW_VRAM:-false}      # Set true if GPU has < 12 GB VRAM
+      CUDA_VISIBLE_DEVICES: "0"
+      MODELS_DOWNLOAD: "dev"            # Flux dev weights; set to "schnell" for lighter model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]         # GPU 0 — change to match your hardware
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/system_stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

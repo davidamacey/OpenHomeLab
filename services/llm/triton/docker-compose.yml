@@ -1,0 +1,79 @@
+# ===========================================================================
+# Triton Inference Server + YOLO API
+#
+# Services:
+#   - triton-api  : NVIDIA Triton model serving (ports 8000/8001/8002)
+#   - yolo-api    : Custom YOLO object detection API (port 8200)
+#
+# GPU: 2 (RTX A6000, 48 GB)
+#
+# NOTE: yolo-api is a custom-built service. Build from your local source
+#       before starting, or replace `image:` with a registry reference.
+#
+# Docs: https://github.com/triton-inference-server/server
+# ===========================================================================
+
+services:
+
+  triton-api:
+    image: nvcr.io/nvidia/tritonserver:24.11-py3
+    container_name: triton-api
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "${TRITON_HTTP_PORT:-8000}:8000"
+      - "${TRITON_GRPC_PORT:-8001}:8001"
+      - "${TRITON_METRICS_PORT:-8002}:8002"
+    volumes:
+      - ${TRITON_MODELS_PATH:-./models}:/models
+    command:
+      - tritonserver
+      - --model-store=/models
+      - --trace-config=trace_level=TIMESTAMPS
+      - --backend-config=default-max-batch-size=50
+      - --strict-model-config=false
+    shm_size: 2g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]         # GPU 2 — A6000 48 GB
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - triton_internal
+      - homelab
+
+  yolo-api:
+    container_name: yolo-api
+    # Build from local source — update this path or replace with a registry image
+    image: yolo-api:latest              # build locally first: docker build -t yolo-api .
+    # build: /path/to/your/yolo-api-source
+    pull_policy: never
+    restart: unless-stopped
+    volumes:
+      - ${YOLO_SRC_PATH:-./src}:/app/src
+    stdin_open: true
+    tty: true
+    ports:
+      - "${YOLO_PORT:-8200}:8200"
+    networks:
+      - triton_internal
+      - homelab
+
+networks:
+  triton_internal:
+    driver: bridge
+  homelab:
+    external: true

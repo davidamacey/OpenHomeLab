@@ -1,0 +1,59 @@
+# ===========================================================================
+# Stable Diffusion XL — TensorRT-accelerated image generation
+# Port:  8600 (backend API), 5550 (web UI)
+# GPU:   2 (RTX A6000, 48 GB) — adjust device_ids as needed
+#
+# NOTE: This service requires a custom Docker build.
+#       The backend Dockerfile and model files are NOT included in this repo.
+#       See the original run_stable_diffusion repo for build instructions.
+#       Models must be downloaded separately into the volume mounts below.
+# ===========================================================================
+
+services:
+  stable-diffusion-backend:
+    container_name: stable-diffusion-backend
+    # Build from local source — replace with a published image if available
+    image: stable-diffusion-backend:latest    # build locally first
+    # build: /path/to/your/stable-diffusion-source
+    volumes:
+      - ${SD_MODELS_PATH:-./models}/engine:/workspace/engine
+      - ${SD_MODELS_PATH:-./models}/pytorch_model:/workspace/pytorch_model
+      - ${SD_MODELS_PATH:-./models}/sdxl-1.0-base:/workspace/sdxl-1.0-base
+      - ${SD_MODELS_PATH:-./models}/sdxl-1.0-refiner:/workspace/sdxl-1.0-refiner
+    stdin_open: true
+    tty: true
+    ports:
+      - "${SD_API_PORT:-8600}:8000"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]         # GPU 2 — change to match your hardware
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    networks:
+      - sd_internal
+      - homelab
+
+  stable-diffusion-webui:
+    container_name: stable-diffusion-webui
+    image: stable-diffusion-webui:latest      # build locally first
+    ports:
+      - "${SD_WEBUI_PORT:-5550}:80"
+    depends_on:
+      - stable-diffusion-backend
+    environment:
+      TZ: ${TZ:-America/New_York}
+      API_ENDPOINT: http://stable-diffusion-backend:8000
+    networks:
+      - sd_internal
+      - homelab
+
+networks:
+  sd_internal:
+    driver: bridge
+  homelab:
+    external: true

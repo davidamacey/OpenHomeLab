@@ -1,0 +1,209 @@
+# ===========================================================================
+# Open WebUI + vLLM Stack
+#
+# Services:
+#   - open-webui  : Chat interface (port 8010)
+#   - vllm-20b    : vLLM serving GPT-OSS-20B on GPU 2 (port 8012)
+#   - tika        : Apache Tika for document/OCR extraction (port 8009)
+#
+# Commented-out services (uncomment to enable):
+#   - vllm-120b   : GPT-OSS-120B on GPUs 0+2 (port 8011) — needs 2× A6000
+#   - comfyui     : Image generation (port 8188) — or use services/ai/comfyui/
+#   - ollama      : Non-vLLM models (port 11434)
+#
+# GPU: GPU 2 (A6000, 48 GB) for 20B model; GPUs 0+2 for 120B
+# Docs: https://docs.openwebui.com/
+# ===========================================================================
+
+x-common-env: &common_env
+  HF_HUB_ENABLE_HF_TRANSFER: "1"
+  VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+  VLLM_LOGGING_LEVEL: "INFO"
+  TRANSFORMERS_OFFLINE: "0"            # set to "1" after first model pull for fully offline
+  CUDA_DEVICE_ORDER: "PCI_BUS_ID"
+  OMP_NUM_THREADS: "1"
+  VLLM_ATTENTION_BACKEND: "TRITON_ATTN_VLLM_V1"
+  PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+  TORCH_CUDA_ARCH_LIST: "8.6"
+  CUDA_CACHE_MAXSIZE: "2147483648"
+
+x-common-volumes: &common_volumes
+  - ${NAS_PATH:-/mnt/nas}/hf_vllm_models:/root/.cache/huggingface
+  - ${NAS_PATH:-/mnt/nas}/vllm_compile_cache:/root/.cache/vllm/torch_compile_cache
+  - ${NAS_PATH:-/mnt/nas}/gpt-oss-cache/torchinductor:/root/.cache/torchinductor
+  - ${NAS_PATH:-/mnt/nas}/gpt-oss-cache/torch_extensions:/root/.cache/torch_extensions
+  - ${NAS_PATH:-/mnt/nas}/gpt-oss-cache/triton_cache:/root/.triton
+  - ${NAS_PATH:-/mnt/nas}/gpt-oss-cache/nvrtc_cache:/root/.cache/nvrtc
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # vLLM — GPT-OSS 20B (OpenAI-compatible API)
+  # Requires: at least 16 GB VRAM; runs on one A6000
+  # ---------------------------------------------------------------------------
+  vllm-20b:
+    image: vllm/vllm-openai:gptoss
+    container_name: vllm-gptoss-20b
+    pull_policy: always
+    restart: unless-stopped
+    runtime: nvidia
+    shm_size: "64g"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    environment:
+      <<: *common_env
+      CUDA_VISIBLE_DEVICES: "2"         # GPU 2 — A6000 48 GB
+      TORCHINDUCTOR_CACHE_DIR: "/root/.cache/torchinductor/gptoss-20b"
+      TORCH_EXTENSIONS_DIR: "/root/.cache/torch_extensions/gptoss-20b"
+      TRITON_CACHE_DIR: "/root/.triton/gptoss-20b"
+      CUDA_CACHE_PATH: "/root/.cache/nvrtc/gptoss-20b"
+    command: >
+      --model openai/gpt-oss-20b
+      --served-model-name gpt-oss-20b
+      --max-model-len 131000
+      --gpu-memory-utilization 0.95
+      --async-scheduling
+      --swap-space 32
+      --max-num-seqs 2
+    ports:
+      - "${VLLM_20B_PORT:-8012}:8000"
+    volumes: *common_volumes
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    networks:
+      - oi_internal
+      - homelab
+
+  # ---------------------------------------------------------------------------
+  # vLLM — GPT-OSS 120B (two A6000s — uncomment to enable)
+  # ---------------------------------------------------------------------------
+  # vllm-120b:
+  #   image: vllm/vllm-openai:gptoss
+  #   container_name: vllm-gptoss-120b
+  #   pull_policy: always
+  #   restart: unless-stopped
+  #   runtime: nvidia
+  #   shm_size: "64g"
+  #   ulimits: { memlock: -1, stack: 67108864 }
+  #   environment:
+  #     <<: *common_env
+  #     CUDA_VISIBLE_DEVICES: "0,2"     # GPUs 0 and 2 — both A6000 48 GB
+  #     TORCHINDUCTOR_CACHE_DIR: "/root/.cache/torchinductor/gptoss-120b"
+  #     TORCH_EXTENSIONS_DIR: "/root/.cache/torch_extensions/gptoss-120b"
+  #     TRITON_CACHE_DIR: "/root/.triton/gptoss-120b"
+  #     CUDA_CACHE_PATH: "/root/.cache/nvrtc/gptoss-120b"
+  #   command: >
+  #     --model openai/gpt-oss-120b
+  #     --served-model-name gpt-oss-120b
+  #     --tensor-parallel-size 2
+  #     --max-model-len 131072
+  #     --gpu-memory-utilization 0.95
+  #     --async-scheduling
+  #     --swap-space 64
+  #     --max-num-seqs 8
+  #   ports:
+  #     - "${VLLM_120B_PORT:-8011}:8000"
+  #   volumes: *common_volumes
+  #   labels:
+  #     gpu: "true"
+  #   networks:
+  #     - oi_internal
+  #     - homelab
+
+  # ---------------------------------------------------------------------------
+  # Apache Tika — Document / OCR text extraction
+  # ---------------------------------------------------------------------------
+  tika:
+    image: apache/tika:latest-full
+    container_name: tika
+    restart: unless-stopped
+    ports:
+      - "${TIKA_PORT:-8009}:9998"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9998/tika"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - oi_internal
+      - homelab
+
+  # ---------------------------------------------------------------------------
+  # Open WebUI — Chat interface connecting to vLLM and ComfyUI
+  # ---------------------------------------------------------------------------
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG:-main}
+    container_name: open-webui
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/ollama_webui/webui:/app/backend/data
+    ports:
+      - "${OPENWEBUI_PORT:-8010}:8080"
+    environment:
+      TZ: ${TZ:-America/New_York}
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}   # Set a strong random secret
+      CONTENT_EXTRACTION_ENGINE: tika
+      ENABLE_IMAGE_GENERATION: "True"
+      IMAGE_GENERATION_ENGINE: comfyui
+      COMFYUI_BASE_URL: http://comfyui:8188
+      IMAGE_SIZE: "1024x1024"
+      IMAGE_STEPS: "20"
+      # Point to your active vLLM instance(s); separate multiple with ;
+      OPENAI_API_BASE_URL: http://vllm-20b:8000/v1
+      OPENAI_API_KEY: EMPTY
+    depends_on:
+      - tika
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - oi_internal
+      - homelab
+
+  # ---------------------------------------------------------------------------
+  # Ollama — Non-vLLM-compatible models (uncomment to enable)
+  # ---------------------------------------------------------------------------
+  # ollama:
+  #   image: ollama/ollama:${OLLAMA_DOCKER_TAG:-latest}
+  #   container_name: ollama
+  #   pull_policy: always
+  #   restart: unless-stopped
+  #   tty: true
+  #   volumes:
+  #     - ${NAS_PATH:-/mnt/nas}/ollama_webui/ollama:/root/.ollama
+  #   ports:
+  #     - "${OLLAMA_PORT:-11434}:11434"
+  #   environment:
+  #     NVIDIA_VISIBLE_DEVICES: "1"     # GPU 1 — RTX 3080 Ti
+  #     NVIDIA_DRIVER_CAPABILITIES: compute,utility
+  #   runtime: nvidia
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             device_ids: ["1"]
+  #             capabilities: [gpu]
+  #   labels:
+  #     gpu: "true"
+  #   networks:
+  #     - oi_internal
+  #     - homelab
+
+networks:
+  oi_internal:
+    driver: bridge
+  homelab:
+    external: true

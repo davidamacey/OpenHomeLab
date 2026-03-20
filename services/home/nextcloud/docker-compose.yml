@@ -1,0 +1,35 @@
+# ===========================================================================
+# Nextcloud AIO — Self-hosted cloud storage and collaboration
+# Ports: 80 (redirect), 8080 (admin UI), 8400 (HTTPS)
+# Docs: https://github.com/nextcloud/all-in-one
+#
+# NOTE: Nextcloud AIO manages its own containers via the AIO mastercontainer.
+#       After starting, visit http://<server-ip>:8080 to configure the stack.
+#       The mastercontainer will pull and start Nextcloud, database, Redis, etc.
+#
+# Port conflict note: port 80 conflicts with nginx-proxy and ntfy.
+# Only run one service on port 80 at a time, or use a reverse proxy.
+# ===========================================================================
+
+services:
+  nextcloud-aio-mastercontainer:
+    image: nextcloud/all-in-one:latest
+    container_name: nextcloud-aio-mastercontainer
+    restart: unless-stopped
+    ports:
+      - "${NEXTCLOUD_HTTP_PORT:-80}:80"
+      - "${NEXTCLOUD_ADMIN_PORT:-8080}:8080"
+      - "${NEXTCLOUD_HTTPS_PORT:-8400}:8443"
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      TZ: ${TZ:-America/New_York}
+      NEXTCLOUD_DATADIR: ${NAS_PATH:-/mnt/nas}/nextcloud_data
+
+networks:
+  homelab:
+    external: true
+
+volumes:
+  nextcloud_aio_mastercontainer:

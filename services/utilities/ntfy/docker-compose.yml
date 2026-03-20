@@ -1,0 +1,63 @@
+# ===========================================================================
+# ntfy — Self-hosted push notification service
+# Port: 80 (or NTFY_PORT if set)
+# Docs: https://docs.ntfy.sh
+#
+# Port conflict note: port 80 conflicts with nextcloud and nginx-proxy.
+# Change NTFY_PORT or use a reverse proxy (nginx-proxy-manager or Traefik).
+#
+# Cloudflare Tunnel (optional):
+#   Uncomment the `tunnel` service and set CLOUDFLARE_TUNNEL_TOKEN in .env
+#   to expose ntfy over the internet without opening firewall ports.
+# ===========================================================================
+
+services:
+  ntfy:
+    image: binwiederhier/ntfy
+    container_name: ntfy
+    restart: unless-stopped
+    command:
+      - serve
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ntfy_lib:/var/lib/ntfy
+      - ntfy_cache:/var/cache/ntfy
+      - ntfy_config:/etc/ntfy
+    ports:
+      - "${NTFY_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo '\"healthy\"\\s*:\\s*true' || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ntfy_internal
+      - homelab
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel (optional) — expose ntfy without opening firewall ports
+  # Requires: CLOUDFLARE_TUNNEL_TOKEN in .env
+  # Get a token at: https://one.dash.cloudflare.com/ → Networks → Tunnels
+  # ---------------------------------------------------------------------------
+  # tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: cloudflare-tunnel
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   networks:
+  #     - ntfy_internal
+
+volumes:
+  ntfy_lib:
+  ntfy_cache:
+  ntfy_config:
+
+networks:
+  ntfy_internal:
+    driver: bridge
+  homelab:
+    external: true
