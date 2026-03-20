@@ -1,0 +1,51 @@
+# ===========================================================================
+# Cloudflare Tunnel — Secure remote access without opening firewall ports
+# Port: none (outbound-only connection to Cloudflare edge)
+# Docs: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+#
+# This single cloudflared container handles ALL tunnel routes for the homelab.
+# Individual service hostnames (e.g., immich.yourdomain.us) are configured in
+# the Cloudflare Zero Trust dashboard, not here.
+#
+# Quick start:
+#   1. Create a tunnel at: https://one.dash.cloudflare.com/
+#      → Networks → Tunnels → Create a tunnel
+#   2. Copy the tunnel token
+#   3. cp .env.example .env && edit .env with your token
+#   4. Add public hostnames in the Cloudflare dashboard for each service
+#   5. docker compose up -d
+#
+# See docs/networking-guide.md for the full setup walkthrough.
+# ===========================================================================
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    pull_policy: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      TZ: ${TZ:-America/New_York}
+    # cloudflared needs access to the host network to reach services on
+    # 192.168.30.11:PORT. Using network_mode: host is the simplest approach.
+    # If you prefer bridge networking, use the homelab network and reference
+    # container names instead of localhost in your tunnel config.
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "info"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# Alternative: bridge networking (uncomment below, comment out network_mode above)
+# In this mode, set tunnel hostnames to http://<container-name>:<internal-port>
+# and ensure all target services are also on the homelab network.
+#
+#    networks:
+#      - homelab
+#
+#networks:
+#  homelab:
+#    external: true

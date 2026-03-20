@@ -8,7 +8,7 @@ This document describes the GPU assignment strategy for homelab services that re
 |-------|-----------------|-------|-----------|----------------------------------------------------------|
 | 0     | RTX A6000       | 48 GB | Slot 0    | ComfyUI, vLLM 120B (with GPU 2), custom AI apps          |
 | 1     | RTX 3080 Ti     | 12 GB | Slot 1    | Immich ML, Frigate NVR, Ring Detector                    |
-| 2     | RTX A6000       | 48 GB | Slot 2    | vLLM 20B, Triton, Stable Diffusion, OpenAudio (alt)      |
+| 2     | RTX A6000       | 48 GB | Slot 2    | vLLM 20B, Triton, Stable Diffusion, OpenProcessor, OpenAudio (alt) |
 
 Adjust the `device_ids` in each service's `docker-compose.yml` to match your own hardware.
 
@@ -30,6 +30,7 @@ These services use the GPU intermittently and can share a GPU since they're rare
 | ComfyUI (Flux)       | 0    | ~20–30 GB  | Image generation, bursty                   |
 | Stable Diffusion     | 2    | ~20–30 GB  | TensorRT backend, bursty                   |
 | Triton API           | 2    | Varies     | Model serving, on-demand                   |
+| OpenProcessor        | 2    | ~8–16 GB   | Triton visual search (YOLO, face, OCR, CLIP)|
 | Immich ML            | 1    | ~2–4 GB    | Face detection + CLIP embeddings           |
 | Frigate NVR          | 1    | ~2–4 GB    | Hardware-accelerated object detection      |
 | Ring Detector        | 1    | ~4–6 GB    | Doorbell event classification              |

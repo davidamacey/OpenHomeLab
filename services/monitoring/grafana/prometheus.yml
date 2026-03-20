@@ -31,3 +31,7 @@ scrape_configs:
   #   static_configs:
   #     - targets: [opentranscribe-backend:8080]
   #   metrics_path: /metrics
+
+  # - job_name: openprocessor-triton
+  #   static_configs:
+  #     - targets: [openprocessor-triton:8002]    # Triton Prometheus metrics

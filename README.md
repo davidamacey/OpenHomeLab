@@ -1,6 +1,6 @@
 # OpenHomeLab
 
-A consolidated, well-organized Docker Compose homelab. 35+ services across eight categories — custom AI apps, AI image generation, LLM inference, photo/NVR, home management, monitoring, utilities, and infrastructure — managed from a single repository.
+A consolidated, well-organized Docker Compose homelab. 40+ services across eight categories — custom AI apps, AI image generation, LLM inference, photo/NVR, home management, monitoring, utilities, and infrastructure — managed from a single repository.
 
 ## Philosophy
 
@@ -45,6 +45,7 @@ These are custom-built applications with published Docker images. They require b
 | VibeVoice        | 8300          | 0     | Real-time voice conversion (single container)             |
 | Video Upscaler   | -             | 0     | Batch upscale old TV/film footage to 1080p/4K             |
 | Ring Detector    | -             | 1     | Doorbell event capture, storage, ML classification        |
+| OpenProcessor    | 4600–4608     | 2     | Triton visual search: YOLO, face, OCR, CLIP + OpenSearch  |
 
 > **Note:** Custom projects use images from `davidamacey/*` on Docker Hub. See each service's `.env.example` for build and image tag instructions.
 
@@ -112,6 +113,7 @@ These are custom-built applications with published Docker images. They require b
 | Portainer           | 9444/9445 | -   | Docker management GUI                  |
 | Heimdall            | 9000/9001 | -   | Application dashboard                  |
 | Homepage            | 3000      | -   | Modern customizable dashboard          |
+| Cloudflare Tunnel   | -         | -   | Secure remote access via Cloudflare    |
 | Watchtower          | -         | -   | Automatic container image updates      |
 
 ## Makefile Commands
@@ -146,7 +148,7 @@ This repo is configured for a three-GPU setup:
 |-----|-------------|-------|-------------------------------------------------------------|
 | 0   | RTX A6000   | 48 GB | ComfyUI, vLLM 120B (with GPU 2), OpenTranscribe, OpenAudio, OpenSpeakers, VibeVoice, Video Upscaler |
 | 1   | RTX 3080 Ti | 12 GB | Immich ML, Frigate NVR, Ring Detector                       |
-| 2   | RTX A6000   | 48 GB | vLLM 20B, Triton, Stable Diffusion, OpenAudio (alt)         |
+| 2   | RTX A6000   | 48 GB | vLLM 20B, Triton, Stable Diffusion, OpenProcessor, OpenAudio (alt) |
 
 **To adapt for your hardware:** update the `device_ids` field in each GPU-enabled service's `docker-compose.yml`. See [`docs/gpu-allocation.md`](docs/gpu-allocation.md) for the full allocation table.
 
@@ -165,7 +167,8 @@ OpenHomeLab/
 │   │   ├── openspeakers/         # TTS & voice cloning (GPU 0)
 │   │   ├── vibevoice/            # Real-time voice conversion (GPU 0)
 │   │   ├── video-upscaler/       # Batch video upscaling (GPU 0)
-│   │   └── ring-detector/        # Doorbell ML classifier (GPU 1)
+│   │   ├── ring-detector/        # Doorbell ML classifier (GPU 1)
+│   │   └── openprocessor/        # Triton visual search pipeline (GPU 2)
 │   ├── llm/
 │   │   ├── open-webui/           # vLLM + Open WebUI + Tika stack
 │   │   └── triton/               # Triton server + YOLO API
@@ -178,7 +181,7 @@ OpenHomeLab/
 │   │   └── frigate/              # NVR camera system (GPU 1)
 │   ├── monitoring/
 │   │   ├── uptime-kuma/          # Uptime monitoring
-│   │   └── grafana/              # Metrics: Prometheus + Grafana + DCGM
+│   │   └── grafana/              # Metrics: Prometheus + Grafana + Loki + DCGM
 │   ├── utilities/
 │   │   ├── stirling-pdf/         # PDF tools
 │   │   ├── drawio/               # Diagrams
@@ -194,6 +197,7 @@ OpenHomeLab/
 │       ├── portainer/            # Docker management GUI
 │       ├── heimdall/             # App dashboard
 │       ├── homepage/             # App dashboard (alternative)
+│       ├── cloudflared/          # Cloudflare Tunnel (remote access)
 │       └── watchtower/           # Auto-updates
 ├── scripts/
 │   ├── deploy.sh                 # Deploy all or specific services
@@ -231,6 +235,7 @@ A few services share default ports (80, 8080). See [`docs/port-map.md`](docs/por
 - [GPU Allocation](docs/gpu-allocation.md) — which GPU each service uses and why
 - [Port Map](docs/port-map.md) — every port, every service
 - [Backup Strategy](docs/backup-strategy.md) — how to back up and restore
+- [Networking Guide](docs/networking-guide.md) — local DNS, reverse proxy, Cloudflare Tunnel, and Immich phone sync
 - [Adding a Service](docs/adding-a-service.md) — template and conventions for new services
 
 ## Related Projects
@@ -240,6 +245,8 @@ The application source code for custom services lives in separate repositories:
 - [OpenTranscribe](https://github.com/davidamacey/OpenTranscribe) — AI transcription with diarization and search
 - [OpenAudio](https://github.com/davidamacey/OpenAudio) — Audio analysis and classification platform
 - [OpenSpeakers](https://github.com/davidamacey/OpenSpeakers) — TTS and voice cloning
+- [OpenProcessor](https://github.com/davidamacey/triton-api) — Triton visual search pipeline (YOLO, face, OCR, CLIP)
+- [OpenRingDetector](https://github.com/davidamacey/OpenRingDetector) — Self-hosted Ring doorbell AI detection
 
 This repo contains only **deployment configs** — `docker-compose.yml` files that pull published images.
 Application development happens in the source repos.

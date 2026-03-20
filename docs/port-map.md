@@ -17,7 +17,14 @@ firewall, or reverse proxy.
 | 3000       | homepage              | infra       | HTTP       | Homepage dashboard                            |
 | 3001       | uptime-kuma           | monitoring  | HTTP       | Uptime monitoring                             |
 | 3002       | grafana               | monitoring  | HTTP       | Metrics dashboards                            |
-| 3100       | homebox               | home        | HTTP       | Inventory management                          |
+| 3100       | homebox               | home        | HTTP       | Inventory management — conflicts with Loki    |
+| 3100       | loki                  | monitoring  | HTTP       | Log aggregation — conflicts with homebox      |
+| 4600       | openprocessor-triton  | ai          | HTTP       | Triton inference HTTP API                     |
+| 4601       | openprocessor-triton  | ai          | gRPC       | Triton inference gRPC                         |
+| 4602       | openprocessor-triton  | ai          | HTTP       | Triton Prometheus metrics                     |
+| 4603       | openprocessor-api     | ai          | HTTP       | Vision pipeline FastAPI                       |
+| 4607       | openprocessor-opensearch | ai       | HTTP       | OpenSearch REST API                           |
+| 4608       | openprocessor-opensearch-dash | ai  | HTTP       | OpenSearch Dashboards                         |
 | 5000       | frigate               | home        | HTTP       | Frigate NVR web UI                            |
 | 5173       | opentranscribe-frontend | ai        | HTTP       | OpenTranscribe web UI                         |
 | 5174       | opentranscribe-backend  | ai        | HTTP       | OpenTranscribe FastAPI                        |
@@ -78,6 +85,8 @@ traffic to the other services via subdomains. In that setup, ntfy and nextcloud 
 to expose port 80 directly — remove the port binding and let the proxy handle routing.
 
 **Port 80/443** — choose only one reverse proxy: `nginx-proxy-manager` *or* `traefik`, not both.
+
+**Port 3100** is used by both `loki` and `homebox`. Change `LOKI_PORT` in monitoring/grafana's `.env` if running both.
 
 **Port 8080** is used by both `stirling-pdf` and `nextcloud` admin UI. They cannot run
 simultaneously on default ports — change `STIRLING_PORT` in stirling-pdf's `.env`:

@@ -1,0 +1,155 @@
+# ===========================================================================
+# OpenProcessor — Triton-based vision pipeline (YOLO, face, OCR, CLIP)
+# Ports: 4600 (triton HTTP), 4601 (gRPC), 4602 (metrics), 4603 (API),
+#        4607 (opensearch), 4608 (opensearch dashboards)
+# GPU:   ${GPU_DEVICE_ID:-2} for Triton server and API
+# Image: https://hub.docker.com/r/davidamacey/openprocessor
+# Source: https://github.com/davidamacey/triton-api
+# ===========================================================================
+
+services:
+  openprocessor-triton:
+    image: davidamacey/openprocessor-triton:latest
+    container_name: openprocessor-triton
+    restart: unless-stopped
+    ports:
+      - "${OP_TRITON_HTTP_PORT:-4600}:8000"
+      - "${OP_TRITON_GRPC_PORT:-4601}:8001"
+      - "${OP_TRITON_METRICS_PORT:-4602}:8002"
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/openprocessor/models:/models
+    command:
+      - tritonserver
+      - --model-store=/models
+      - --backend-config=default-max-batch-size=128
+      - --strict-model-config=false
+      - --model-control-mode=explicit
+      - --load-model=yolov11_small_trt_end2end
+      - --load-model=scrfd_10g_bnkps
+      - --load-model=arcface_w600k_r50
+      - --load-model=mobileclip2_s2_image_encoder
+      - --load-model=mobileclip2_s2_text_encoder
+      - --load-model=paddleocr_det_trt
+      - --load-model=paddleocr_rec_trt
+      - --load-model=ocr_pipeline
+      - --log-verbose=1
+      - --log-info=true
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_ID:-2}"]
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - openprocessor_internal
+      - homelab
+
+  openprocessor-api:
+    image: davidamacey/openprocessor:latest
+    container_name: openprocessor-api
+    restart: unless-stopped
+    environment:
+      TRITON_URL: openprocessor-triton:8001
+      HF_HOME: /home/appuser/.cache/huggingface
+      HF_HUB_CACHE: /home/appuser/.cache/huggingface/hub
+      CUDA_VISIBLE_DEVICES: "${GPU_DEVICE_ID:-2}"
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/openprocessor/model-cache:/home/appuser/.cache/huggingface
+    command:
+      - uvicorn
+      - src.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --workers=32
+      - --loop=uvloop
+      - --http=httptools
+      - --backlog=4096
+      - --limit-concurrency=512
+      - --log-level=info
+    ports:
+      - "${OP_API_PORT:-4603}:8000"
+    shm_size: 8g
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_DEVICE_ID:-2}"]
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - openprocessor-triton
+    networks:
+      - openprocessor_internal
+      - homelab
+
+  openprocessor-opensearch:
+    image: opensearchproject/opensearch:3
+    container_name: openprocessor-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g"
+      DISABLE_SECURITY_PLUGIN: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - openprocessor_opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "${OP_OPENSEARCH_PORT:-4607}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS http://localhost:9200 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+    networks:
+      - openprocessor_internal
+      - homelab
+
+  openprocessor-opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3
+    container_name: openprocessor-opensearch-dashboards
+    restart: unless-stopped
+    environment:
+      OPENSEARCH_HOSTS: '["http://openprocessor-opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports:
+      - "${OP_OPENSEARCH_DASH_PORT:-4608}:5601"
+    depends_on:
+      openprocessor-opensearch:
+        condition: service_healthy
+    networks:
+      - openprocessor_internal
+      - homelab
+
+volumes:
+  openprocessor_opensearch_data:
+
+networks:
+  openprocessor_internal:
+    driver: bridge
+  homelab:
+    external: true
