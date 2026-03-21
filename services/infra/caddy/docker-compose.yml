@@ -1,0 +1,46 @@
+# ===========================================================================
+# Caddy — Automatic HTTPS reverse proxy with Let's Encrypt
+# Ports: 80 (HTTP redirect), 443 (HTTPS)
+# Docs: https://caddyserver.com/docs/
+#
+# Quick start:
+#   1. cp .env.example .env && edit .env with your domain
+#   2. Edit Caddyfile with your services
+#   3. Forward ports 80 + 443 on your router to this server
+#   4. docker compose up -d
+#
+# Why Caddy over Nginx Proxy Manager:
+#   - Zero-config automatic HTTPS (Let's Encrypt + renewal)
+#   - No admin UI needed — config is a simple text file
+#   - Supports on-demand TLS for wildcard subdomains
+#   - Lighter resource usage (~20MB RAM)
+#
+# Port conflict: 80/443 conflict with nginx-proxy-manager and traefik.
+# Run only ONE reverse proxy. If migrating from NPM, stop it first.
+# ===========================================================================
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"    # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data           # TLS certs + ACME state
+      - caddy_config:/config       # Runtime config
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - homelab
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  homelab:
+    external: true

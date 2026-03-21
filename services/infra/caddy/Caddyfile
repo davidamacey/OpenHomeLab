@@ -1,0 +1,74 @@
+# =============================================================================
+# Caddyfile — Reverse proxy configuration
+#
+# Replace "yourdomain.com" with your actual domain throughout this file.
+# Caddy automatically obtains and renews Let's Encrypt HTTPS certificates
+# for every domain listed here.
+#
+# Requirements:
+#   - DNS A record for each subdomain pointing to your server's public IP
+#   - Ports 80 + 443 forwarded on your router to this server (192.168.30.11)
+#
+# To add a new service:
+#   1. Add a DNS A record: newservice.yourdomain.com -> your-public-ip
+#   2. Add a block below with reverse_proxy pointing to the service port
+#   3. docker compose restart caddy
+# =============================================================================
+
+# -- ntfy (notifications with PWA push support) --
+ntfy.yourdomain.com {
+	reverse_proxy localhost:8090
+
+	# Required headers for WebSocket (push notifications)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
+
+# -- Heimdall (dashboard) --
+heimdall.yourdomain.com {
+	reverse_proxy localhost:9000
+
+	# Basic auth — change the hash with: caddy hash-password
+	# basicauth {
+	# 	david $2a$14$YOUR_HASHED_PASSWORD_HERE
+	# }
+}
+
+# -- Immich (photo management) --
+immich.yourdomain.com {
+	reverse_proxy localhost:2283
+}
+
+# -- Open WebUI (LLM chat) --
+openwebui.yourdomain.com {
+	reverse_proxy localhost:8010
+}
+
+# -- OpenTranscribe --
+opentranscribe.yourdomain.com {
+	reverse_proxy localhost:5173
+}
+
+# -- Grafana (metrics) --
+grafana.yourdomain.com {
+	reverse_proxy localhost:3002
+}
+
+# -- Portainer (Docker management) --
+portainer.yourdomain.com {
+	reverse_proxy localhost:9444
+}
+
+# -- Uptime Kuma (monitoring) --
+uptimekuma.yourdomain.com {
+	reverse_proxy localhost:3001
+}
+
+# -- Catch-all: reject unknown subdomains --
+*.yourdomain.com {
+	tls {
+		on_demand
+	}
+	respond "Not found" 404
+}

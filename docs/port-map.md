@@ -7,12 +7,14 @@ firewall, or reverse proxy.
 
 | Port(s)    | Service               | Category    | Protocol   | Notes                                         |
 |------------|-----------------------|-------------|------------|-----------------------------------------------|
-| 80         | nginx-proxy-manager   | infra       | HTTP       | Reverse proxy — conflicts with ntfy/nextcloud |
+| 80         | caddy                 | infra       | HTTP       | Reverse proxy — conflicts with NPM/ntfy       |
+| 80         | nginx-proxy-manager   | infra       | HTTP       | Reverse proxy — conflicts with caddy/ntfy     |
 | 80         | ntfy                  | utilities   | HTTP       | Notification server — see conflict notes      |
 | 80         | nextcloud             | home        | HTTP       | Nextcloud redirect — see conflict notes       |
 | 81         | nginx-proxy-manager   | infra       | HTTP       | NPM admin UI                                  |
 | 443        | nginx-proxy-manager   | infra       | HTTPS      |                                               |
-| 443        | traefik               | infra       | HTTPS      | Conflicts with NPM — run only one             |
+| 443        | caddy                 | infra       | HTTPS      | Conflicts with NPM/traefik — run only one     |
+| 443        | traefik               | infra       | HTTPS      | Conflicts with NPM/caddy — run only one       |
 | 2283       | immich                | media       | HTTP       | Photo management web UI + API                 |
 | 3000       | homepage              | infra       | HTTP       | Homepage dashboard                            |
 | 3001       | uptime-kuma           | monitoring  | HTTP       | Uptime monitoring                             |
@@ -84,7 +86,7 @@ firewall, or reverse proxy.
 traffic to the other services via subdomains. In that setup, ntfy and nextcloud don't need
 to expose port 80 directly — remove the port binding and let the proxy handle routing.
 
-**Port 80/443** — choose only one reverse proxy: `nginx-proxy-manager` *or* `traefik`, not both.
+**Port 80/443** — choose only one reverse proxy: `nginx-proxy-manager`, `caddy`, or `traefik`.
 
 **Port 3100** is used by both `loki` and `homebox`. Change `LOKI_PORT` in monitoring/grafana's `.env` if running both.
 
