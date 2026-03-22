@@ -40,6 +40,16 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
           echo "Found $(echo "$FILES" | grep -c . || echo 0) file(s) to validate"
 
+      - name: Seed .env files from .env.example for validation
+        run: |
+          # Services that use env_file: .env or have volume vars without defaults
+          # need a .env present. Copy .env.example → .env for every service so
+          # validation uses the documented placeholder values.
+          find services -name ".env.example" | while IFS= read -r f; do
+            cp "$f" "$(dirname "$f")/.env"
+          done
+          echo "Seeded $(find services -name ".env.example" | wc -l) .env files"
+
       - name: Validate compose files
         if: steps.find.outputs.files != ''
         run: |
