@@ -1,0 +1,67 @@
+# ===========================================================================
+# CI — Validate Docker Compose files on every PR
+#
+# Runs `docker compose config --quiet` on every service whose compose file
+# was added or modified in the PR. Catches YAML errors, bad env variable
+# references, and schema violations before they reach main.
+# ===========================================================================
+
+name: Validate compose files
+
+on:
+  pull_request:
+    paths:
+      - "services/**/docker-compose.yml"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/**/docker-compose.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find changed or all compose files
+        id: find
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # On PRs: only validate changed compose files
+            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+              | grep "docker-compose.yml" || true)
+          else
+            # On push to main: validate everything
+            FILES=$(find services -name "docker-compose.yml" | sort)
+          fi
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$FILES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Found $(echo "$FILES" | grep -c . || echo 0) file(s) to validate"
+
+      - name: Validate compose files
+        if: steps.find.outputs.files != ''
+        run: |
+          FAILED=0
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            dir="$(dirname "$file")"
+            echo -n "  Validating $file ... "
+            # Use an empty env so missing vars default to blank (expected for templates)
+            if docker compose -f "$file" config --quiet 2>/dev/null; then
+              echo "OK"
+            else
+              echo "FAILED"
+              docker compose -f "$file" config 2>&1 | grep -v "variable is not set" || true
+              FAILED=$((FAILED + 1))
+            fi
+          done <<< "${{ steps.find.outputs.files }}"
+
+          if [[ $FAILED -gt 0 ]]; then
+            echo ""
+            echo "ERROR: $FAILED compose file(s) failed validation."
+            exit 1
+          fi
+          echo ""
+          echo "All compose files are valid."

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+
+  "timezone": "America/New_York",
+  "schedule": ["on the first day of the week"],
+
+  "labels": ["dependencies", "docker"],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 3,
+
+  "packageRules": [
+    {
+      "description": "Auto-merge minor and patch Docker image updates without review",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "description": "Major Docker version bumps require manual review — breaking changes possible",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "reviewers": ["davidamacey"]
+    },
+    {
+      "description": "Group all postgres updates into one PR",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres", "docker.io/library/postgres", "pgvector/pgvector"],
+      "groupName": "PostgreSQL",
+      "automerge": false
+    },
+    {
+      "description": "Group all redis/valkey updates into one PR",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["redis", "docker.io/library/redis", "valkey/valkey"],
+      "groupName": "Redis / Valkey",
+      "automerge": true
+    },
+    {
+      "description": "Pin infrastructure images (traefik, caddy) — higher blast radius",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["traefik", "caddy"],
+      "automerge": false,
+      "reviewers": ["davidamacey"]
+    }
+  ]
+}
