@@ -1,0 +1,36 @@
+# ===========================================================================
+# IT Tools — Collection of handy online tools for developers
+# Port: 5620
+# Docs: https://github.com/CorentinTh/it-tools
+#
+# 100+ tools: UUID generator, JWT decoder, cron parser, hash generator,
+# color converter, regex tester, base64 encoder, QR code generator, etc.
+# Entirely offline — no data leaves your server.
+#
+# Quick start:
+#   1. make up SERVICE=utilities/it-tools
+#   2. Open http://<server-ip>:5620
+# ===========================================================================
+
+services:
+  it-tools:
+    image: ghcr.io/corentinth/it-tools:latest
+    container_name: it-tools
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    ports:
+      - "${IT_TOOLS_PORT:-5620}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

@@ -1,0 +1,46 @@
+# ===========================================================================
+# Eclipse Mosquitto — Lightweight MQTT message broker
+# Ports: 1883 (MQTT TCP), 9001 (MQTT over WebSocket)
+# Docs: https://mosquitto.org/documentation/
+#
+# The backbone for IoT device communication. Used by Zigbee2MQTT, Home
+# Assistant, ESPHome, Node-RED, and most smart home devices.
+#
+# A mosquitto.conf is required — a minimal one is created by the entrypoint
+# if /mosquitto/config/mosquitto.conf does not exist.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. mkdir -p ${DATA_PATH}/mosquitto/{config,data,log}
+#   3. Copy the mosquitto.conf from config/mosquitto.conf.example to
+#      ${DATA_PATH}/mosquitto/config/mosquitto.conf
+#   4. make up SERVICE=home/mosquitto
+# ===========================================================================
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/mosquitto/config:/mosquitto/config
+      - ${DATA_PATH:-/mnt/nas/appdata}/mosquitto/data:/mosquitto/data
+      - ${DATA_PATH:-/mnt/nas/appdata}/mosquitto/log:/mosquitto/log
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

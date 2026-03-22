@@ -1,0 +1,46 @@
+# ===========================================================================
+# Zigbee2MQTT — Bridge Zigbee devices to MQTT (no proprietary hub needed)
+# Port: 8885 (web UI / frontend)
+# Docs: https://www.zigbee2mqtt.io/guide/getting-started/
+#
+# Requires a Zigbee USB coordinator (e.g. SONOFF Zigbee 3.0 USB Dongle Plus,
+# CC2652P, or similar). Find the device path with:
+#   ls /dev/serial/by-id/
+#
+# Works with 3000+ Zigbee devices (Ikea, Philips Hue, Aqara, Sonoff, etc.).
+# Sends device data to Mosquitto; Home Assistant auto-discovers devices.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Set ZIGBEE_ADAPTER to your dongle path (e.g. /dev/ttyUSB0)
+#   3. make up SERVICE=home/zigbee2mqtt
+#   4. Open http://<server-ip>:8885
+# ===========================================================================
+
+services:
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:latest
+    container_name: zigbee2mqtt
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/zigbee2mqtt/data:/app/data
+      - /run/udev:/run/udev:ro
+    devices:
+      - ${ZIGBEE_ADAPTER:-/dev/ttyUSB0}:/dev/ttyACM0
+    ports:
+      - "${Z2M_PORT:-8885}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

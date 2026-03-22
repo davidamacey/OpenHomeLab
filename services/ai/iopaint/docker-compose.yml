@@ -1,0 +1,68 @@
+# ===========================================================================
+# IOPaint — AI-powered image inpainting and object removal
+# Port: 7800
+# GPU:  2 (RTX A6000, 48 GB) — adjust device_ids as needed
+# Docs: https://github.com/Sanster/IOPaint
+#
+# Supports multiple open-source models:
+#   lama       — LaMa (default, fast, good quality)
+#   mat        — MAT (mask-aware transformer)
+#   zits       — ZITS (structure-aware)
+#   fcf        — FcF (large mask inpainting)
+#   manga      — Manga inpainting
+#   powerpaint — PowerPaint (needs HF_TOKEN)
+#   brushnet   — BrushNet (needs HF_TOKEN)
+#   cv2        — OpenCV (no GPU needed)
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=ai/iopaint
+#   3. Open http://<server-ip>:7800
+# ===========================================================================
+
+services:
+  iopaint:
+    image: cwq1913/iopaint:latest
+    container_name: iopaint
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${IOPAINT_PORT:-7800}:8080"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/iopaint/models:/root/.cache/huggingface
+      - ${DATA_PATH:-/mnt/nas/appdata}/iopaint/input:/workspace/input
+      - ${DATA_PATH:-/mnt/nas/appdata}/iopaint/output:/workspace/output
+    environment:
+      TZ: ${TZ:-America/New_York}
+      HF_TOKEN: ${HF_TOKEN:-}               # Required for PowerPaint, BrushNet, and gated models
+      CUDA_VISIBLE_DEVICES: "2"
+    command: >
+      iopaint start
+      --model=${IOPAINT_MODEL:-lama}
+      --device=cuda
+      --port=8080
+      --host=0.0.0.0
+      --model-dir=/root/.cache/huggingface
+      --input=/workspace/input
+      --output-dir=/workspace/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]             # GPU 2 — change to match your hardware
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

@@ -1,0 +1,49 @@
+# ===========================================================================
+# qBittorrent — Feature-rich BitTorrent client with web UI
+# Ports: 7460 (web UI), 6881 (torrent TCP+UDP)
+# Docs: https://docs.linuxserver.io/images/docker-qbittorrent/
+#
+# The default web UI password is printed in the container logs on first run.
+# Change it immediately after first login.
+#
+# Tip: Set the download path to your shared /downloads volume so Radarr
+# and Sonarr can pick up completed downloads automatically.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/qbittorrent
+#   3. docker logs qbittorrent | grep "temporary password"
+#   4. Open http://<server-ip>:7460 and log in
+# ===========================================================================
+
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      WEBUI_PORT: 8080
+      TORRENTING_PORT: ${QBIT_TORRENT_PORT:-6881}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/qbittorrent/config:/config
+      - ${NAS_PATH:-/mnt/nas}/downloads:/downloads
+    ports:
+      - "${QBIT_WEBUI_PORT:-7460}:8080"
+      - "${QBIT_TORRENT_PORT:-6881}:6881"
+      - "${QBIT_TORRENT_PORT:-6881}:6881/udp"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

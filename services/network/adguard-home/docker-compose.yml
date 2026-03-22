@@ -1,0 +1,54 @@
+# ===========================================================================
+# AdGuard Home — Network-wide DNS ad and tracker blocking
+# Ports: 3080 (web UI), 5353 (DNS)
+# Docs: https://github.com/AdguardTeam/AdGuardHome/wiki/Docker
+#
+# Acts as a DNS server for your whole network. Block ads, trackers, and
+# malware at the DNS level across ALL devices without any client software.
+#
+# NOTE: Port 53 (standard DNS) is often occupied by systemd-resolved on
+# Ubuntu/Debian. This config uses port 5353 externally to avoid that conflict.
+# To use port 53, stop systemd-resolved first or change its listen port.
+# Alternatively, point your router's DNS to this server on port 5353.
+#
+# First-run setup wizard runs on port 3080. After setup, the web UI moves
+# to the port you configured (default: 3080).
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=network/adguard-home
+#   3. Open http://<server-ip>:3080 and run the setup wizard
+#   4. Point your router's DNS to <server-ip>
+# ===========================================================================
+
+services:
+  adguard-home:
+    image: adguard/adguardhome:latest
+    container_name: adguard-home
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/adguard-home/work:/opt/adguardhome/work
+      - ${DATA_PATH:-/mnt/nas/appdata}/adguard-home/conf:/opt/adguardhome/conf
+    ports:
+      - "${AGH_PORT:-3080}:3000"        # setup wizard / web UI
+      - "${AGH_DNS_PORT:-5353}:53/tcp"  # DNS over TCP
+      - "${AGH_DNS_PORT:-5353}:53/udp"  # DNS over UDP
+      # Optional: DNS-over-HTTPS and DNS-over-TLS
+      # - "443:443/tcp"
+      # - "784:784/udp"    # DNS-over-QUIC
+      # - "853:853/tcp"    # DNS-over-TLS
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/control/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

@@ -189,7 +189,7 @@ help:
 	@echo "  make gpu           Show GPU allocation"
 	@echo "  make network       Create homelab Docker network"
 	@echo ""
-	@echo "Available categories: ai, llm, media, home, utilities, infra"
+	@echo "Available categories: ai, llm, media, home, monitoring, network, dev, utilities, infra"
 	@echo ""
 
 .DEFAULT_GOAL := help

@@ -1,0 +1,58 @@
+# ===========================================================================
+# wg-easy — WireGuard VPN with a simple web UI
+# Ports: 51821 (web UI), 51820/udp (WireGuard tunnel)
+# Docs: https://github.com/wg-easy/wg-easy
+#
+# The easiest way to run WireGuard on a server. Manage clients, QR codes,
+# and configs from the web UI. Requires kernel WireGuard support (Linux 5.6+).
+#
+# IMPORTANT: Set WG_HOST to your server's public IP or domain name.
+# IMPORTANT: Set PASSWORD_HASH using:
+#   docker run --rm ghcr.io/wg-easy/wg-easy wgpw 'your_password' | cat
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Fill in WG_HOST and PASSWORD_HASH
+#   3. make up SERVICE=network/wg-easy
+#   4. Open http://<server-ip>:51821
+#   5. Forward UDP port 51820 on your router to this server
+# ===========================================================================
+
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    container_name: wg-easy
+    restart: unless-stopped
+    pull_policy: always
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      TZ: ${TZ:-America/New_York}
+      WG_HOST: ${WG_HOST}                           # Your public IP or domain — REQUIRED
+      PASSWORD_HASH: ${WG_PASSWORD_HASH}             # bcrypt hash of web UI password — REQUIRED
+      WG_PORT: ${WG_PORT:-51820}
+      WG_DEFAULT_ADDRESS: ${WG_DEFAULT_ADDRESS:-10.8.0.x}
+      WG_DEFAULT_DNS: ${WG_DEFAULT_DNS:-1.1.1.1}
+      WG_ALLOWED_IPS: ${WG_ALLOWED_IPS:-0.0.0.0/0}  # Route all traffic through VPN
+      UI_PORT: "51821"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/wg-easy:/etc/wireguard
+    ports:
+      - "${WG_PORT:-51820}:51820/udp"
+      - "${WG_UI_PORT:-51821}:51821/tcp"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:51821/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

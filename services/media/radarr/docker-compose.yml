@@ -1,0 +1,43 @@
+# ===========================================================================
+# Radarr — Movie collection manager with automatic downloading
+# Port: 7878
+# Docs: https://wiki.servarr.com/radarr
+#
+# Monitors RSS feeds and download clients (qBittorrent, SABnzbd) to grab
+# movies automatically. Integrates with Prowlarr for indexer management
+# and Jellyfin for library updates.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/radarr
+#   3. Open http://<server-ip>:7878
+# ===========================================================================
+
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/radarr/config:/config
+      - ${NAS_PATH:-/mnt/nas}/media/movies:/movies
+      - ${NAS_PATH:-/mnt/nas}/downloads:/downloads
+    ports:
+      - "${RADARR_PORT:-7878}:7878"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

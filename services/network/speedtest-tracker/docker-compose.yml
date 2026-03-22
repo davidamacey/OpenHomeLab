@@ -1,0 +1,47 @@
+# ===========================================================================
+# Speedtest Tracker — Automated internet speed monitoring with history
+# Port: 7900
+# Docs: https://docs.speedtest-tracker.dev
+#
+# Runs Ookla Speedtest CLI on a schedule and stores results with graphs.
+# Optionally sends alerts when speeds drop below a threshold.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=network/speedtest-tracker
+#   3. Open http://<server-ip>:7900
+#   4. Default credentials: admin@example.com / password
+#      Change immediately under Settings → User
+# ===========================================================================
+
+services:
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    container_name: speedtest-tracker
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      APP_KEY: ${SPEEDTEST_APP_KEY}         # REQUIRED: generate with `openssl rand -base64 32`
+      APP_URL: http://localhost:${SPEEDTEST_PORT:-7900}
+      DB_CONNECTION: sqlite
+      SPEEDTEST_SCHEDULE: ${SPEEDTEST_SCHEDULE:-0 */6 * * *}   # every 6 hours
+      SPEEDTEST_SERVERS: ${SPEEDTEST_SERVERS:-}                  # leave blank for auto-select
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/speedtest-tracker/config:/config
+    ports:
+      - "${SPEEDTEST_PORT:-7900}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

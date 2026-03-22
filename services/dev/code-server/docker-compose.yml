@@ -1,0 +1,47 @@
+# ===========================================================================
+# code-server — VS Code in the browser
+# Port: 3600
+# Docs: https://docs.linuxserver.io/images/docker-code-server/
+#
+# Full VS Code experience in any browser. Access your development environment
+# from any device. Supports extensions, terminals, and Git integration.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Set HASHED_PASSWORD or leave PASSWORD set
+#   3. make up SERVICE=dev/code-server
+#   4. Open http://<server-ip>:3600
+# ===========================================================================
+
+services:
+  code-server:
+    image: lscr.io/linuxserver/code-server:latest
+    container_name: code-server
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      PASSWORD: ${CODE_SERVER_PASSWORD:-}           # plain-text password (use HASHED_PASSWORD instead)
+      HASHED_PASSWORD: ${CODE_SERVER_HASHED_PASSWORD:-}  # bcrypt hash; takes precedence over PASSWORD
+      SUDO_PASSWORD: ${CODE_SERVER_SUDO_PASSWORD:-}      # optional sudo password inside the container
+      DEFAULT_WORKSPACE: /config/workspace
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/code-server/config:/config
+      # Mount your project directories here:
+      # - ${NAS_PATH:-/mnt/nas}/repos:/home/coder/repos
+    ports:
+      - "${CODE_SERVER_PORT:-3600}:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8443/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

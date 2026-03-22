@@ -1,0 +1,39 @@
+# ===========================================================================
+# Memos — Privacy-first, lightweight note-taking service
+# Port: 5230
+# Docs: https://www.usememos.com/docs
+#
+# A Twitter/microblog-style note app for quick thoughts, snippets, and links.
+# Supports Markdown, tags, pinned memos, and a public/private memo API.
+# Has mobile apps and a browser extension.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=utilities/memos
+#   3. Open http://<server-ip>:5230 and create your account
+# ===========================================================================
+
+services:
+  memos:
+    image: neosmemo/memos:stable
+    container_name: memos
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/memos/data:/var/opt/memos
+    ports:
+      - "${MEMOS_PORT:-5230}:5230"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5230/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

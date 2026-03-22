@@ -1,0 +1,41 @@
+# ===========================================================================
+# Jellyseerr — Media request and discovery management for Jellyfin
+# Port: 5055
+# Docs: https://docs.jellyseerr.dev
+#
+# Provides a Netflix-style interface for users to request movies and TV shows.
+# Automatically sends requests to Radarr and Sonarr, then notifies users
+# when content is available in Jellyfin.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/jellyseerr
+#   3. Open http://<server-ip>:5055
+#   4. Sign in with your Jellyfin account to complete setup
+# ===========================================================================
+
+services:
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      LOG_LEVEL: ${JELLYSEERR_LOG_LEVEL:-debug}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/jellyseerr/config:/app/config
+    ports:
+      - "${JELLYSEERR_PORT:-5055}:5055"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5055/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

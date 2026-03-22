@@ -1,0 +1,156 @@
+# ===========================================================================
+# MediaCMS — Self-hosted video platform (private YouTube alternative)
+# Port: 7950
+# Docs: https://github.com/mediacms-io/mediacms
+#
+# A modern, full-featured video CMS: upload, organise, and stream your own
+# videos privately. Features include:
+#   - Upload and automatic transcoding (HLS multi-bitrate via ffmpeg)
+#   - Playlists, categories, tags, full-text search
+#   - User accounts with fine-grained permissions
+#   - Clean, responsive web UI and REST API
+#   - Can be made fully private (login required to view anything)
+#
+# PRIVACY SETUP (after first login):
+#   1. Settings → Users → REGISTRATION_SYSTEM = closed
+#   2. Settings → Media → CAN_LIKE_MEDIA / CAN_DISLIKE_MEDIA = only_members
+#   3. Settings → Portal → PORTAL_WORKFLOW = private (requires login to browse)
+#
+# Quick start:
+#   1. cp .env.example .env  — set MEDIACMS_SECRET_KEY and DB password
+#   2. make up SERVICE=media/mediacms
+#   3. Open http://<server-ip>:7950
+#   4. Admin credentials: admin / mediacms_password (change immediately!)
+#      Or set via: docker exec -it mediacms-web python manage.py createsuperuser
+# ===========================================================================
+
+services:
+
+  mediacms-db:
+    image: postgres:15-alpine
+    container_name: mediacms-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${MEDIACMS_DBNAME:-mediacms}
+      POSTGRES_USER: ${MEDIACMS_DBUSER:-mediacms}
+      POSTGRES_PASSWORD: ${MEDIACMS_DBPASS}
+    volumes:
+      - mediacms_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${MEDIACMS_DBNAME:-mediacms} -U ${MEDIACMS_DBUSER:-mediacms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediacms_internal
+
+  mediacms-redis:
+    image: redis:7-alpine
+    container_name: mediacms-redis
+    restart: unless-stopped
+    volumes:
+      - mediacms_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediacms_internal
+
+  mediacms-web:
+    image: mediacms/mediacms:latest
+    container_name: mediacms-web
+    restart: unless-stopped
+    pull_policy: always
+    command: ./deploy/docker/start_web.sh
+    depends_on:
+      mediacms-db:
+        condition: service_healthy
+      mediacms-redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/New_York}
+      POSTGRES_HOST: mediacms-db
+      POSTGRES_NAME: ${MEDIACMS_DBNAME:-mediacms}
+      POSTGRES_USER: ${MEDIACMS_DBUSER:-mediacms}
+      POSTGRES_PASSWORD: ${MEDIACMS_DBPASS}
+      REDIS_HOST: mediacms-redis
+      SECRET_KEY: ${MEDIACMS_SECRET_KEY}          # REQUIRED: strong random string
+      FRONTEND_HOST: http://${MEDIACMS_HOSTNAME:-localhost}:${MEDIACMS_PORT:-7950}
+      ADMIN_EMAIL: ${MEDIACMS_ADMIN_EMAIL:-admin@localhost}
+      ADMIN_PASSWORD: ${MEDIACMS_ADMIN_PASSWORD:-mediacms_password}  # change after first login!
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/media_files:/home/mediacms.io/mediacms/media_files
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/logs:/home/mediacms.io/mediacms/logs
+    ports:
+      - "${MEDIACMS_PORT:-7950}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - mediacms_internal
+      - homelab
+
+  mediacms-worker:
+    image: mediacms/mediacms:latest
+    container_name: mediacms-worker
+    restart: unless-stopped
+    command: ./deploy/docker/start_celery_worker.sh
+    depends_on:
+      mediacms-db:
+        condition: service_healthy
+      mediacms-redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/New_York}
+      POSTGRES_HOST: mediacms-db
+      POSTGRES_NAME: ${MEDIACMS_DBNAME:-mediacms}
+      POSTGRES_USER: ${MEDIACMS_DBUSER:-mediacms}
+      POSTGRES_PASSWORD: ${MEDIACMS_DBPASS}
+      REDIS_HOST: mediacms-redis
+      SECRET_KEY: ${MEDIACMS_SECRET_KEY}
+      FRONTEND_HOST: http://${MEDIACMS_HOSTNAME:-localhost}:${MEDIACMS_PORT:-7950}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/media_files:/home/mediacms.io/mediacms/media_files
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/logs:/home/mediacms.io/mediacms/logs
+    networks:
+      - mediacms_internal
+
+  mediacms-beat:
+    image: mediacms/mediacms:latest
+    container_name: mediacms-beat
+    restart: unless-stopped
+    command: ./deploy/docker/start_celery_beat.sh
+    depends_on:
+      mediacms-db:
+        condition: service_healthy
+      mediacms-redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/New_York}
+      POSTGRES_HOST: mediacms-db
+      POSTGRES_NAME: ${MEDIACMS_DBNAME:-mediacms}
+      POSTGRES_USER: ${MEDIACMS_DBUSER:-mediacms}
+      POSTGRES_PASSWORD: ${MEDIACMS_DBPASS}
+      REDIS_HOST: mediacms-redis
+      SECRET_KEY: ${MEDIACMS_SECRET_KEY}
+      FRONTEND_HOST: http://${MEDIACMS_HOSTNAME:-localhost}:${MEDIACMS_PORT:-7950}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/media_files:/home/mediacms.io/mediacms/media_files
+      - ${DATA_PATH:-/mnt/nas/appdata}/mediacms/logs:/home/mediacms.io/mediacms/logs
+    networks:
+      - mediacms_internal
+
+volumes:
+  mediacms_db:
+  mediacms_redis:
+
+networks:
+  mediacms_internal:
+    driver: bridge
+  homelab:
+    external: true

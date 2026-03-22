@@ -1,6 +1,6 @@
 # OpenHomeLab
 
-A consolidated, well-organized Docker Compose homelab. 40+ services across eight categories — custom AI apps, AI image generation, LLM inference, photo/NVR, home management, monitoring, utilities, and infrastructure — managed from a single repository.
+A consolidated, well-organized Docker Compose homelab. 65+ services across ten categories — custom AI apps, AI image generation/editing, LLM inference, media server, photo/NVR, home automation, monitoring, utilities, network, dev tools, and infrastructure — managed from a single repository.
 
 ## Philosophy
 
@@ -49,12 +49,13 @@ These are custom-built applications with published Docker images. They require b
 
 > **Note:** Custom projects use images from `davidamacey/*` on Docker Hub. See each service's `.env.example` for build and image tag instructions.
 
-### AI Image Generation (`services/ai/`)
+### AI Image Generation & Editing (`services/ai/`)
 
 | Service          | Port  | GPU | Description                                     |
 |------------------|-------|-----|-------------------------------------------------|
 | ComfyUI          | 8188  | 0   | AI image generation with Flux models            |
 | Stable Diffusion | 8600  | 2   | SDXL TensorRT backend + web UI                  |
+| IOPaint          | 7800  | 2   | AI object removal and inpainting (LaMa, MAT, PowerPaint, BrushNet) |
 
 ### LLM / Inference Services (`services/llm/`)
 
@@ -67,12 +68,39 @@ These are custom-built applications with published Docker images. They require b
 | Triton API    | 8000–8002  | 2    | NVIDIA Triton model serving                        |
 | YOLO API      | 8200       | -    | Object detection API (custom build)                |
 
-### Media / NVR (`services/media/`, `services/home/`)
+### Media Server (`services/media/`)
+
+| Service        | Port(s)        | GPU | Description                                        |
+|----------------|----------------|-----|----------------------------------------------------|
+| Jellyfin       | 8096           | 1   | Free open-source media server (movies, TV, music)  |
+| Radarr         | 7878           | -   | Automatic movie collection manager                 |
+| Sonarr         | 8989           | -   | Automatic TV show collection manager               |
+| Prowlarr       | 9696           | -   | Centralised indexer manager for arr apps           |
+| Bazarr         | 6767           | -   | Automatic subtitle downloader                      |
+| Jellyseerr     | 5055           | -   | Media request and discovery UI for Jellyfin        |
+| qBittorrent    | 7460/6881      | -   | Feature-rich BitTorrent download client            |
+| SABnzbd        | 7470           | -   | Usenet binary newsreader and download client       |
+| Kavita         | 7480           | -   | Self-hosted manga, comics, and book reader         |
+| Audiobookshelf | 13378          | -   | Audiobook and podcast server with mobile apps      |
+| Tdarr          | 8265/8266      | 2   | Distributed video transcoding automation (NVENC)   |
+| MediaCMS       | 7950           | -   | Private video platform — upload/stream your own videos (YouTube-style) |
+| PeerTube       | 7960           | -   | Full-featured private video platform: channels, playlists, live, API |
+
+### Photo / NVR (`services/media/`, `services/home/`)
 
 | Service  | Port(s)        | GPU | Description                            |
 |----------|----------------|-----|----------------------------------------|
 | Immich   | 2283           | 1   | Self-hosted photo & video management   |
 | Frigate  | 5000/8554/8555 | 1   | GPU-accelerated NVR with object detect |
+
+### Home Automation (`services/home/`)
+
+| Service         | Port(s)   | GPU | Description                                        |
+|-----------------|-----------|-----|----------------------------------------------------|
+| Home Assistant  | 8123      | -   | Open-source home automation hub (3000+ integrations) |
+| Node-RED        | 1880      | -   | Visual flow-based IoT and automation programming   |
+| Mosquitto       | 1883/9001 | -   | Lightweight MQTT message broker for IoT devices    |
+| Zigbee2MQTT     | 8885      | -   | Bridge Zigbee devices to MQTT (no hub required)    |
 
 ### Home Management (`services/home/`)
 
@@ -102,6 +130,25 @@ These are custom-built applications with published Docker images. They require b
 | Vaultwarden   | 8222       | -   | Bitwarden-compatible password vault |
 | BookStack     | 6875       | -   | Self-hosted wiki and documentation  |
 | Duplicati     | 8210       | -   | Backup with cloud storage support   |
+| n8n           | 5678       | -   | Workflow automation with 400+ integrations |
+| IT Tools      | 5620       | -   | 100+ online developer tools (offline) |
+| Memos         | 5230       | -   | Privacy-first lightweight note-taking |
+
+### Network (`services/network/`)
+
+| Service           | Port(s)       | GPU | Description                                      |
+|-------------------|---------------|-----|--------------------------------------------------|
+| AdGuard Home      | 3080/5353     | -   | Network-wide DNS ad and tracker blocking         |
+| wg-easy           | 51821/51820   | -   | WireGuard VPN with a simple web UI               |
+| Speedtest Tracker | 7900          | -   | Scheduled internet speed monitoring with history |
+
+### Dev Tools (`services/dev/`)
+
+| Service       | Port(s)    | GPU | Description                                   |
+|---------------|------------|-----|-----------------------------------------------|
+| Gitea         | 3500/2222  | -   | Lightweight self-hosted Git service           |
+| code-server   | 3600       | -   | VS Code in the browser                        |
+| Woodpecker CI | 3610       | -   | Lightweight CI/CD with GitHub Actions syntax  |
 
 ### Infrastructure (`services/infra/`)
 
@@ -162,6 +209,7 @@ OpenHomeLab/
 │   ├── ai/
 │   │   ├── comfyui/              # Flux image generation (GPU 0)
 │   │   ├── stable-diffusion/     # SDXL TensorRT (GPU 2)
+│   │   ├── iopaint/              # AI object removal & inpainting (GPU 2)
 │   │   ├── opentranscribe/       # AI transcription platform (GPU 0)
 │   │   ├── openaudio/            # Audio analysis platform (GPU 0/2)
 │   │   ├── openspeakers/         # TTS & voice cloning (GPU 0)
@@ -173,15 +221,40 @@ OpenHomeLab/
 │   │   ├── open-webui/           # vLLM + Open WebUI + Tika stack
 │   │   └── triton/               # Triton server + YOLO API
 │   ├── media/
-│   │   └── immich/               # Photo management (GPU 1)
+│   │   ├── immich/               # Photo management (GPU 1)
+│   │   ├── jellyfin/             # Media server: movies, TV, music (GPU 1)
+│   │   ├── mediacms/             # Private video platform (YouTube-style)
+│   │   ├── peertube/             # Full-featured private video platform
+│   │   ├── radarr/               # Automatic movie downloader
+│   │   ├── sonarr/               # Automatic TV show downloader
+│   │   ├── prowlarr/             # Centralised indexer manager
+│   │   ├── bazarr/               # Automatic subtitle downloader
+│   │   ├── jellyseerr/           # Media request management
+│   │   ├── qbittorrent/          # BitTorrent client
+│   │   ├── sabnzbd/              # Usenet downloader
+│   │   ├── kavita/               # Manga, comics, and book reader
+│   │   ├── audiobookshelf/       # Audiobook and podcast server
+│   │   └── tdarr/                # Video transcoding automation (GPU 2)
 │   ├── home/
-│   │   ├── homebox/              # Inventory
-│   │   ├── tandoor/              # Recipes
+│   │   ├── homeassistant/        # Home automation hub (host networking)
+│   │   ├── node-red/             # Visual IoT automation flows
+│   │   ├── mosquitto/            # MQTT broker for IoT devices
+│   │   ├── zigbee2mqtt/          # Zigbee-to-MQTT bridge
+│   │   ├── homebox/              # Inventory management
+│   │   ├── tandoor/              # Recipe manager
 │   │   ├── nextcloud/            # Cloud storage
 │   │   └── frigate/              # NVR camera system (GPU 1)
 │   ├── monitoring/
 │   │   ├── uptime-kuma/          # Uptime monitoring
 │   │   └── grafana/              # Metrics: Prometheus + Grafana + Loki + DCGM
+│   ├── network/
+│   │   ├── adguard-home/         # DNS ad and tracker blocking
+│   │   ├── wg-easy/              # WireGuard VPN with web UI
+│   │   └── speedtest-tracker/    # Scheduled internet speed monitoring
+│   ├── dev/
+│   │   ├── gitea/                # Self-hosted Git service
+│   │   ├── code-server/          # VS Code in the browser
+│   │   └── woodpecker-ci/        # CI/CD pipeline server + agent
 │   ├── utilities/
 │   │   ├── stirling-pdf/         # PDF tools
 │   │   ├── drawio/               # Diagrams
@@ -189,7 +262,10 @@ OpenHomeLab/
 │   │   ├── paperless-ngx/        # Document management
 │   │   ├── vaultwarden/          # Password vault
 │   │   ├── bookstack/            # Wiki / documentation
-│   │   └── duplicati/            # Backup to cloud or local
+│   │   ├── duplicati/            # Backup to cloud or local
+│   │   ├── n8n/                  # Workflow automation (400+ integrations)
+│   │   ├── it-tools/             # 100+ developer tools, fully offline
+│   │   └── memos/                # Lightweight note-taking
 │   └── infra/
 │       ├── nginx-proxy/          # Reverse proxy (GUI)
 │       ├── traefik/              # Reverse proxy (label-based)

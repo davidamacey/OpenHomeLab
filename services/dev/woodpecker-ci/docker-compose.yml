@@ -1,0 +1,83 @@
+# ===========================================================================
+# Woodpecker CI — Lightweight, GitHub Actions-compatible CI/CD system
+# Port: 3610 (web UI / API)
+# Docs: https://woodpecker-ci.org/docs/intro
+#
+# Woodpecker is a community fork of Drone CI. It runs pipelines defined in
+# .woodpecker.yml files in your Git repos. Works with Gitea, GitHub, GitLab.
+#
+# IMPORTANT: You must create an OAuth2 application in your Gitea/GitHub/GitLab
+# instance and paste the client ID and secret below.
+#
+# For Gitea setup:
+#   1. Go to Gitea → Settings → Applications → OAuth2 Apps → Add
+#   2. Redirect URI: http://<server-ip>:3610/authorize
+#   3. Copy Client ID and Secret to WOODPECKER_GITEA_CLIENT/SECRET
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Fill in WOODPECKER_AGENT_SECRET, OAuth2 credentials
+#   3. make up SERVICE=dev/woodpecker-ci
+#   4. Open http://<server-ip>:3610
+# ===========================================================================
+
+services:
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:latest
+    container_name: woodpecker-server
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      WOODPECKER_OPEN: ${WOODPECKER_OPEN:-false}
+      WOODPECKER_HOST: http://${WOODPECKER_HOST:-localhost}:${WOODPECKER_PORT:-3610}
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}     # REQUIRED: random shared secret
+      # Gitea OAuth2 (comment out and replace with GitHub/GitLab config if needed)
+      WOODPECKER_GITEA: "true"
+      WOODPECKER_GITEA_URL: ${WOODPECKER_GITEA_URL:-http://gitea:3000}
+      WOODPECKER_GITEA_CLIENT: ${WOODPECKER_GITEA_CLIENT}     # REQUIRED: OAuth2 client ID
+      WOODPECKER_GITEA_SECRET: ${WOODPECKER_GITEA_SECRET}     # REQUIRED: OAuth2 client secret
+    volumes:
+      - woodpecker_server:/var/lib/woodpecker
+    ports:
+      - "${WOODPECKER_PORT:-3610}:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - woodpecker_internal
+      - homelab
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:latest
+    container_name: woodpecker-agent
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      - woodpecker-server
+    command: agent
+    environment:
+      TZ: ${TZ:-America/New_York}
+      WOODPECKER_SERVER: woodpecker-server:9000
+      WOODPECKER_AGENT_SECRET: ${WOODPECKER_AGENT_SECRET}     # must match server
+      WOODPECKER_MAX_WORKFLOWS: ${WOODPECKER_MAX_WORKFLOWS:-4}
+      WOODPECKER_BACKEND: docker
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - woodpecker_agent:/etc/woodpecker
+    networks:
+      - woodpecker_internal
+
+volumes:
+  woodpecker_server:
+  woodpecker_agent:
+
+networks:
+  woodpecker_internal:
+    driver: bridge
+  homelab:
+    external: true

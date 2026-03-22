@@ -1,0 +1,42 @@
+# ===========================================================================
+# Sonarr — TV show collection manager with automatic downloading
+# Port: 8989
+# Docs: https://wiki.servarr.com/sonarr
+#
+# Monitors RSS feeds and download clients (qBittorrent, SABnzbd) to grab
+# TV episodes automatically. Integrates with Prowlarr and Jellyfin.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/sonarr
+#   3. Open http://<server-ip>:8989
+# ===========================================================================
+
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/sonarr/config:/config
+      - ${NAS_PATH:-/mnt/nas}/media/tvshows:/tv
+      - ${NAS_PATH:-/mnt/nas}/downloads:/downloads
+    ports:
+      - "${SONARR_PORT:-8989}:8989"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

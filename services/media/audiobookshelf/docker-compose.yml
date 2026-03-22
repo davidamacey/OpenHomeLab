@@ -1,0 +1,41 @@
+# ===========================================================================
+# Audiobookshelf — Self-hosted audiobook and podcast server
+# Port: 13378
+# Docs: https://www.audiobookshelf.org/docs
+#
+# Streams audiobooks and podcasts, tracks listening progress across devices,
+# and auto-downloads new podcast episodes. Has mobile apps for iOS and Android.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/audiobookshelf
+#   3. Open http://<server-ip>:13378
+# ===========================================================================
+
+services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${NAS_PATH:-/mnt/nas}/media/audiobooks:/audiobooks
+      - ${NAS_PATH:-/mnt/nas}/media/podcasts:/podcasts
+      - ${DATA_PATH:-/mnt/nas/appdata}/audiobookshelf/config:/config
+      - ${DATA_PATH:-/mnt/nas/appdata}/audiobookshelf/metadata:/metadata
+    ports:
+      - "${ABS_PORT:-13378}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

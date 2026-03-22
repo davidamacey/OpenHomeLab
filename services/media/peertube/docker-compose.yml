@@ -1,0 +1,140 @@
+# ===========================================================================
+# PeerTube — Feature-rich self-hosted video platform
+# Port: 7960
+# Docs: https://docs.joinpeertube.org/install/docker
+# GitHub: https://github.com/Chocobozzz/PeerTube
+#
+# PeerTube is the most full-featured open-source YouTube alternative:
+#   - Video channels (like YouTube channels per-user)
+#   - Playlists, subscriptions, comments, reactions
+#   - HLS transcoding with multi-quality levels
+#   - Live streaming support
+#   - REST API + video import from URL
+#   - ActivityPub federation (disabled in this config for privacy)
+#   - Mobile-friendly responsive UI
+#
+# PRIVATE SETUP: Federation and public signup are disabled by default here.
+# This makes PeerTube a completely private, invite-only platform.
+# All settings can be changed via Admin → Configuration after first login.
+#
+# First admin account creation (run once after startup):
+#   docker exec -it peertube /bin/bash
+#   cd /app && NODE_CONFIG_DIR=/config NODE_ENV=production node dist/scripts/create-user.js
+# Or set PEERTUBE_ADMIN_EMAIL and use the "Forgot password" flow to set a password.
+#
+# Quick start:
+#   1. cp .env.example .env — fill in PEERTUBE_SECRET and DB password
+#   2. make up SERVICE=media/peertube
+#   3. Open http://<server-ip>:7960
+# ===========================================================================
+
+services:
+
+  peertube-db:
+    image: postgres:15-alpine
+    container_name: peertube-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PEERTUBE_DBNAME:-peertube}
+      POSTGRES_USER: ${PEERTUBE_DBUSER:-peertube}
+      POSTGRES_PASSWORD: ${PEERTUBE_DBPASS}
+    volumes:
+      - peertube_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${PEERTUBE_DBNAME:-peertube} -U ${PEERTUBE_DBUSER:-peertube}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - peertube_internal
+
+  peertube-redis:
+    image: redis:7-alpine
+    container_name: peertube-redis
+    restart: unless-stopped
+    volumes:
+      - peertube_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - peertube_internal
+
+  peertube:
+    image: chocobozzz/peertube:production-bookworm
+    container_name: peertube
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      peertube-db:
+        condition: service_healthy
+      peertube-redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/New_York}
+
+      # Server identity
+      PEERTUBE_WEBSERVER_HOSTNAME: ${PEERTUBE_HOSTNAME:-localhost}
+      PEERTUBE_WEBSERVER_PORT: ${PEERTUBE_PORT:-7960}
+      PEERTUBE_WEBSERVER_HTTPS: "false"
+      PEERTUBE_SECRET: ${PEERTUBE_SECRET}         # REQUIRED: strong random string
+
+      # Database
+      PEERTUBE_DB_HOSTNAME: peertube-db
+      PEERTUBE_DB_PORT: "5432"
+      PEERTUBE_DB_NAME: ${PEERTUBE_DBNAME:-peertube}
+      PEERTUBE_DB_USERNAME: ${PEERTUBE_DBUSER:-peertube}
+      PEERTUBE_DB_PASSWORD: ${PEERTUBE_DBPASS}
+
+      # Redis
+      PEERTUBE_REDIS_HOSTNAME: peertube-redis
+      PEERTUBE_REDIS_PORT: "6379"
+
+      # Admin contact email (shown on the about page)
+      PEERTUBE_ADMIN_EMAIL: ${PEERTUBE_ADMIN_EMAIL:-admin@localhost}
+
+      # Privacy defaults — no public signup, no federation
+      PEERTUBE_SIGNUP_ENABLED: "false"
+      PEERTUBE_TRANSCODING_ENABLED: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_144P: "false"
+      PEERTUBE_TRANSCODING_RESOLUTION_240P: "false"
+      PEERTUBE_TRANSCODING_RESOLUTION_360P: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_480P: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_720P: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_1080P: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_1440P: "true"
+      PEERTUBE_TRANSCODING_RESOLUTION_2160P: "false"
+
+      # Email (optional — leave blank to disable)
+      PEERTUBE_SMTP_HOSTNAME: ${PEERTUBE_SMTP_HOST:-}
+      PEERTUBE_SMTP_PORT: ${PEERTUBE_SMTP_PORT:-465}
+      PEERTUBE_SMTP_USERNAME: ${PEERTUBE_SMTP_USER:-}
+      PEERTUBE_SMTP_PASSWORD: ${PEERTUBE_SMTP_PASS:-}
+      PEERTUBE_SMTP_TLS: "true"
+      PEERTUBE_SMTP_FROM: "PeerTube <noreply@localhost>"
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/peertube/data:/data
+      - ${DATA_PATH:-/mnt/nas/appdata}/peertube/config:/config
+    ports:
+      - "${PEERTUBE_PORT:-7960}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/api/v1/config/about"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - peertube_internal
+      - homelab
+
+volumes:
+  peertube_db:
+  peertube_redis:
+
+networks:
+  peertube_internal:
+    driver: bridge
+  homelab:
+    external: true

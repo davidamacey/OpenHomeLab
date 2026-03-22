@@ -1,0 +1,61 @@
+# ===========================================================================
+# Jellyfin — Free, open-source media server
+# Port: 8096
+# Docs: https://jellyfin.org/docs/
+#
+# Serves movies, TV, music, photos, and live TV.
+# GPU transcoding supported (NVENC on NVIDIA).
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/jellyfin
+#   3. Open http://<server-ip>:8096 and run the setup wizard
+# ===========================================================================
+
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      JELLYFIN_PublishedServerUrl: ${JELLYFIN_URL:-http://localhost:8096}
+      # NVIDIA hardware transcoding — comment out deploy block below if not using GPU
+      NVIDIA_VISIBLE_DEVICES: "1"
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/jellyfin/config:/config
+      - ${DATA_PATH:-/mnt/nas/appdata}/jellyfin/cache:/cache
+      - ${NAS_PATH:-/mnt/nas}/media/movies:/data/movies:ro
+      - ${NAS_PATH:-/mnt/nas}/media/tvshows:/data/tvshows:ro
+      - ${NAS_PATH:-/mnt/nas}/media/music:/data/music:ro
+    ports:
+      - "${JELLYFIN_PORT:-8096}:8096"
+      - "${JELLYFIN_HTTPS_PORT:-8920}:8920"   # optional HTTPS
+      - "7359:7359/udp"                         # local discovery
+      - "1900:1900/udp"                         # DLNA discovery (comment if conflict)
+    # NVIDIA GPU for hardware transcoding (NVENC/NVDEC)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]               # GPU 1 — RTX 3080 Ti, adjust as needed
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true

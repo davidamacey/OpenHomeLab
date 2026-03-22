@@ -1,0 +1,51 @@
+# ===========================================================================
+# Home Assistant — Open-source home automation hub
+# Port: 8123
+# Docs: https://www.home-assistant.io/installation/linux#docker-compose
+#
+# Central automation controller for lights, locks, sensors, cameras, HVAC,
+# and 3000+ integrations. Works with Zigbee2MQTT, ESPHome, Frigate, and more.
+#
+# NOTE: host networking is strongly recommended for device discovery (mDNS,
+# SSDP, HomeKit, DHCP). If you must use bridge mode, add specific device
+# ports and disable host-based discovery integrations.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=home/homeassistant
+#   3. Open http://<server-ip>:8123 and create your account
+# ===========================================================================
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    pull_policy: always
+    # host networking gives HA full access to the local network for mDNS,
+    # SSDP, HomeKit, DHCP-based discovery, and Bluetooth.
+    # Remove network_mode and uncomment the networks block below to use bridge.
+    network_mode: host
+    privileged: true
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro    # Bluetooth support
+    # Uncomment for bridge networking (loses mDNS/SSDP/HomeKit discovery):
+    # ports:
+    #   - "${HA_PORT:-8123}:8123"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # networks:
+    #   - homelab
+
+# Uncomment when using bridge networking:
+# networks:
+#   homelab:
+#     external: true

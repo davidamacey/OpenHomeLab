@@ -77,6 +77,45 @@ firewall, or reverse proxy.
 | 9444       | portainer (HTTP)      | infra       | HTTP       | Portainer Docker GUI                          |
 | 9445       | portainer (HTTPS)     | infra       | HTTPS      | Portainer Docker GUI HTTPS                    |
 | 11434      | ollama (optional)     | llm         | HTTP       | Ollama model API (disabled by default)        |
+| 13378      | audiobookshelf        | media       | HTTP       | Audiobook and podcast server                  |
+
+## New Services
+
+| Port(s)    | Service               | Category    | Protocol   | Notes                                         |
+|------------|-----------------------|-------------|------------|-----------------------------------------------|
+| 1880       | node-red              | home        | HTTP       | Visual IoT automation flows                   |
+| 1883       | mosquitto             | home        | MQTT       | MQTT broker (TCP)                             |
+| 3080       | adguard-home          | network     | HTTP       | AdGuard web UI / setup wizard                 |
+| 3500       | gitea                 | dev         | HTTP       | Gitea web UI                                  |
+| 3600       | code-server           | dev         | HTTP       | VS Code in the browser                        |
+| 3610       | woodpecker-ci         | dev         | HTTP       | Woodpecker CI web UI                          |
+| 5055       | jellyseerr            | media       | HTTP       | Media request management                      |
+| 5230       | memos                 | utilities   | HTTP       | Lightweight note-taking                       |
+| 5353       | adguard-home (DNS)    | network     | DNS TCP/UDP| DNS — use port 53 if systemd-resolved freed   |
+| 5620       | it-tools              | utilities   | HTTP       | Developer tools collection                    |
+| 5678       | n8n                   | utilities   | HTTP       | Workflow automation                           |
+| 6767       | bazarr                | media       | HTTP       | Automatic subtitle downloader                 |
+| 2222       | gitea (SSH)           | dev         | SSH        | Gitea SSH clone port                          |
+| 7460       | qbittorrent (web UI)  | media       | HTTP       | qBittorrent web interface                     |
+| 6881       | qbittorrent (torrent) | media       | TCP/UDP    | BitTorrent port                               |
+| 7470       | sabnzbd               | media       | HTTP       | SABnzbd Usenet web UI                         |
+| 7480       | kavita                | media       | HTTP       | Manga, comics, book reader                    |
+| 7800       | iopaint               | ai          | HTTP       | AI object removal / inpainting (GPU 2)        |
+| 7878       | radarr                | media       | HTTP       | Movie collection manager                      |
+| 7900       | speedtest-tracker     | network     | HTTP       | Internet speed monitoring                     |
+| 8096       | jellyfin              | media       | HTTP       | Jellyfin media server web UI                  |
+| 8123       | homeassistant         | home        | HTTP       | Home Assistant (host networking)              |
+| 8265       | tdarr (web UI)        | media       | HTTP       | Tdarr transcoding web UI                      |
+| 8266       | tdarr (server)        | media       | HTTP       | Tdarr server API                              |
+| 8885       | zigbee2mqtt           | home        | HTTP       | Zigbee2MQTT web frontend                      |
+| 8920       | jellyfin (HTTPS)      | media       | HTTPS      | Jellyfin optional HTTPS port                  |
+| 8989       | sonarr                | media       | HTTP       | TV show collection manager                    |
+| 9001       | mosquitto (WebSocket) | home        | WS         | MQTT over WebSocket                           |
+| 9696       | prowlarr              | media       | HTTP       | Indexer manager for arr apps                  |
+| 51820      | wg-easy (WireGuard)   | network     | UDP        | WireGuard VPN tunnel port                     |
+| 51821      | wg-easy (web UI)      | network     | HTTP       | WireGuard management web UI                   |
+| 7950       | mediacms              | media       | HTTP       | Private YouTube-style video platform          |
+| 7960       | peertube              | media       | HTTP       | Full-featured private video platform          |
 
 ## Port Conflict Notes
 

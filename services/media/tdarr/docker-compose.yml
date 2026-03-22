@@ -1,0 +1,65 @@
+# ===========================================================================
+# Tdarr — Distributed video transcoding automation
+# Ports: 8265 (web UI), 8266 (server API)
+# Docs: https://docs.tdarr.io
+#
+# Automatically transcodes your media library to save space (e.g., H.264 → H.265).
+# GPU-accelerated encoding via NVENC. Run additional tdarr-node containers
+# for distributed transcoding across multiple machines.
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. make up SERVICE=media/tdarr
+#   3. Open http://<server-ip>:8265
+#   4. Add your media library under Libraries and configure a transcode plugin flow
+# ===========================================================================
+
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      serverIP: "0.0.0.0"
+      serverPort: "8266"
+      webUIPort: "8265"
+      internalNode: "true"              # run a built-in transcoding worker node
+      inContainer: "true"
+      ffmpegVersion: "6"
+      nodeName: "tdarr-internal-node"
+      NVIDIA_DRIVER_CAPABILITIES: all
+      NVIDIA_VISIBLE_DEVICES: "2"       # GPU 2 — A6000; adjust as needed
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/tdarr/server:/app/server
+      - ${DATA_PATH:-/mnt/nas/appdata}/tdarr/configs:/app/configs
+      - ${DATA_PATH:-/mnt/nas/appdata}/tdarr/logs:/app/logs
+      - ${NAS_PATH:-/mnt/nas}/media:/media
+      - ${DATA_PATH:-/mnt/nas/appdata}/tdarr/transcode_cache:/temp
+    ports:
+      - "${TDARR_WEBUI_PORT:-8265}:8265"
+      - "${TDARR_SERVER_PORT:-8266}:8266"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]         # GPU 2 — change to match your hardware
+              capabilities: [gpu, compute, utility]
+    labels:
+      gpu: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8265"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    external: true
