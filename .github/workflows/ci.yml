@@ -17,6 +17,8 @@ on:
     branches: [main]
     paths:
       - "services/**/docker-compose.yml"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:    # Allow manual trigger from Actions tab
 
 jobs:
   validate:
