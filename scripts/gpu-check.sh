@@ -42,7 +42,7 @@ echo ""
 echo -e "${BOLD}=== VRAM Usage per GPU ===${NC}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.free,memory.total,utilization.gpu \
     --format=csv,noheader,nounits \
-| while IFS=, read -r idx name mem_used mem_free mem_total util; do
+| while IFS=, read -r idx name mem_used _mem_free mem_total util; do
     printf "${GREEN}GPU %s${NC} %-25s | VRAM: %5s / %5s MiB used | Util: %3s%%\n" \
         "$idx" "$name" "$(echo "$mem_used" | tr -d ' ')" "$(echo "$mem_total" | tr -d ' ')" "$(echo "$util" | tr -d ' ')"
 done

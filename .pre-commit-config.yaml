@@ -1,0 +1,45 @@
+repos:
+  # Standard file hygiene checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^security-reports/
+      - id: end-of-file-fixer
+        exclude: ^security-reports/
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom YAML tags used in docker-compose
+      - id: check-json
+        exclude: ^security-reports/
+      - id: check-added-large-files
+        args: [--maxkb=10240]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: ^security-reports/
+
+  # Secret detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        args: [--verbose, --no-banner]
+        exclude: ^security-reports/
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # Conventional commit messages
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--force-scope]
+
+default_stages: [pre-commit]
+fail_fast: false

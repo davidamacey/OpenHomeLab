@@ -1,0 +1,14 @@
+title = "OpenHomeLab Gitleaks Config"
+
+# Allowlist paths that intentionally contain placeholder or example values.
+# .env.example files are documentation — they show the variable names and
+# acceptable formats but never contain real credentials.
+[allowlist]
+  description = "Placeholder values in documentation and example files"
+  paths = [
+    '''\.env\.example$''',
+    '''docs/''',
+    '''.*SETUP\.md$''',
+    '''.*-guide\.md$''',
+    '''README\.md$''',
+  ]
