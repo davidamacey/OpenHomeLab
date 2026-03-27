@@ -7,7 +7,7 @@
 #
 # Requirements:
 #   - DNS A record for each subdomain pointing to your server's public IP
-#   - Ports 80 + 443 forwarded on your router to this server (192.168.30.11)
+#   - Ports 80 + 443 forwarded on your router to this server (YOUR_SERVER_IP)
 #
 # To add a new service:
 #   1. Add a DNS A record: newservice.yourdomain.com -> your-public-ip

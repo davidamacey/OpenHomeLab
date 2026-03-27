@@ -19,7 +19,7 @@ Alternative to Nginx Proxy Manager and Cloudflare Tunnel. Caddy gives you automa
 
 1. **A domain you own** (e.g. `yourdomain.com`)
 2. **DNS A records** pointing subdomains to your server's public IP
-3. **Router port forwarding**: ports 80 + 443 → `192.168.30.11`
+3. **Router port forwarding**: ports 80 + 443 → `YOUR_SERVER_IP`
 4. **Stop any existing reverse proxy** on ports 80/443 (NPM, traefik)
 
 ## Setup
@@ -45,8 +45,8 @@ In your domain registrar or DNS provider, add A records:
 ### 3. Forward Ports on Your Router
 
 In your router admin:
-- Forward **port 80** (TCP) → `192.168.30.11:80`
-- Forward **port 443** (TCP+UDP) → `192.168.30.11:443`
+- Forward **port 80** (TCP) → `YOUR_SERVER_IP:80`
+- Forward **port 443** (TCP+UDP) → `YOUR_SERVER_IP:443`
 
 ### 4. Edit the Caddyfile
 
@@ -118,7 +118,7 @@ heimdall.yourdomain.com {
 
 ```
 heimdall.yourdomain.com {
-    @external not remote_ip 192.168.30.0/24
+    @external not remote_ip YOUR_LAN_SUBNET
     basicauth @external {
         david $2a$14$HASHED_PASSWORD
     }

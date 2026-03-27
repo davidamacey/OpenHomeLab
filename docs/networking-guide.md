@@ -31,7 +31,7 @@ By the end of this guide, you'll be able to access `opentranscribe.home.lab` on 
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    SERVER (192.168.30.11)                           │
+│                    SERVER (YOUR_SERVER_IP)                           │
 │                                                                     │
 │   ┌─────────────┐  ┌──────────────────┐  ┌───────────────────┐    │
 │   │  Pi-hole     │  │  Nginx Proxy Mgr │  │  Docker Services  │    │
@@ -45,7 +45,7 @@ By the end of this guide, you'll be able to access `opentranscribe.home.lab` on 
 │   └─────────────┘  └──────────────────┘  │  Heimdall   :9000 │    │
 │                                           │  Stirling   :8080 │    │
 │         LAN clients query Pi-hole         │  DrawIO     :8081 │    │
-│         *.home.lab → 192.168.30.11        │  ntfy       :80   │    │
+│         *.home.lab → YOUR_SERVER_IP        │  ntfy       :80   │    │
 │         NPM routes by Host header         │  ...              │    │
 │         to the correct container port     └───────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
@@ -53,8 +53,8 @@ By the end of this guide, you'll be able to access `opentranscribe.home.lab` on 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     YOUR LAPTOP (on WiFi)                          │
 │   Browser → opentranscribe.home.lab                                │
-│          → DNS query to Pi-hole (192.168.30.11:53)                 │
-│          → resolves to 192.168.30.11                               │
+│          → DNS query to Pi-hole (YOUR_SERVER_IP:53)                 │
+│          → resolves to YOUR_SERVER_IP                               │
 │          → NPM routes to localhost:5173                            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -65,11 +65,11 @@ By the end of this guide, you'll be able to access `opentranscribe.home.lab` on 
 
 Before starting, confirm these are in place:
 
-- Server IP: `192.168.30.11`
+- Server IP: `YOUR_SERVER_IP`
 - Pi-hole running at `/mnt/nvm/repos/pihole/` (port 53)
 - Your Cloudflare domain (this guide uses `yourdomain.us` — replace everywhere)
 - ntfy already has a working tunnel at `ntfy.yourdomain.us`
-- Router DHCP set to hand out `192.168.30.11` as the DNS server (for Pi-hole)
+- Router DHCP set to hand out `YOUR_SERVER_IP` as the DNS server (for Pi-hole)
 
 ---
 
@@ -83,30 +83,30 @@ The `.local` TLD is reserved for mDNS (Bonjour/Avahi). Mixing it with Pi-hole DN
 
 ### Step-by-Step: Add DNS Records in Pi-hole
 
-1. Open Pi-hole admin: `http://192.168.30.11/admin`
+1. Open Pi-hole admin: `http://YOUR_SERVER_IP/admin`
 2. Log in (password is in your Pi-hole compose or `.env`)
 3. Go to **Local DNS** → **DNS Records**
 4. Add each entry below (Domain → IP):
 
 | Domain                          | IP Address       |
 |---------------------------------|------------------|
-| `opentranscribe.home.lab`       | `192.168.30.11`  |
-| `openspeakers.home.lab`         | `192.168.30.11`  |
-| `openaudio.home.lab`            | `192.168.30.11`  |
-| `immich.home.lab`               | `192.168.30.11`  |
-| `plex.home.lab`                 | `192.168.30.11`  |
-| `heimdall.home.lab`             | `192.168.30.11`  |
-| `openwebui.home.lab`            | `192.168.30.11`  |
-| `tandoor.home.lab`              | `192.168.30.11`  |
-| `homebox.home.lab`              | `192.168.30.11`  |
-| `stirling.home.lab`             | `192.168.30.11`  |
-| `drawio.home.lab`               | `192.168.30.11`  |
-| `ntfy.home.lab`                 | `192.168.30.11`  |
-| `portainer.home.lab`            | `192.168.30.11`  |
-| `grafana.home.lab`              | `192.168.30.11`  |
-| `uptimekuma.home.lab`           | `192.168.30.11`  |
-| `npm.home.lab`                  | `192.168.30.11`  |
-| `pihole.home.lab`               | `192.168.30.11`  |
+| `opentranscribe.home.lab`       | `YOUR_SERVER_IP`  |
+| `openspeakers.home.lab`         | `YOUR_SERVER_IP`  |
+| `openaudio.home.lab`            | `YOUR_SERVER_IP`  |
+| `immich.home.lab`               | `YOUR_SERVER_IP`  |
+| `plex.home.lab`                 | `YOUR_SERVER_IP`  |
+| `heimdall.home.lab`             | `YOUR_SERVER_IP`  |
+| `openwebui.home.lab`            | `YOUR_SERVER_IP`  |
+| `tandoor.home.lab`              | `YOUR_SERVER_IP`  |
+| `homebox.home.lab`              | `YOUR_SERVER_IP`  |
+| `stirling.home.lab`             | `YOUR_SERVER_IP`  |
+| `drawio.home.lab`               | `YOUR_SERVER_IP`  |
+| `ntfy.home.lab`                 | `YOUR_SERVER_IP`  |
+| `portainer.home.lab`            | `YOUR_SERVER_IP`  |
+| `grafana.home.lab`              | `YOUR_SERVER_IP`  |
+| `uptimekuma.home.lab`           | `YOUR_SERVER_IP`  |
+| `npm.home.lab`                  | `YOUR_SERVER_IP`  |
+| `pihole.home.lab`               | `YOUR_SERVER_IP`  |
 
 5. Click **Add** after each entry.
 
@@ -116,18 +116,18 @@ From any device on your network using Pi-hole as its DNS:
 
 ```bash
 # From your laptop or the server itself
-nslookup opentranscribe.home.lab 192.168.30.11
-# Should return: Address: 192.168.30.11
+nslookup opentranscribe.home.lab YOUR_SERVER_IP
+# Should return: Address: YOUR_SERVER_IP
 
-dig opentranscribe.home.lab @192.168.30.11
-# Should return: ANSWER SECTION with 192.168.30.11
+dig opentranscribe.home.lab @YOUR_SERVER_IP
+# Should return: ANSWER SECTION with YOUR_SERVER_IP
 ```
 
 ### Make Sure Your Network Uses Pi-hole
 
-Your router's DHCP settings should hand out `192.168.30.11` as the DNS server. This is usually under:
+Your router's DHCP settings should hand out `YOUR_SERVER_IP` as the DNS server. This is usually under:
 
-- **Router admin** → DHCP settings → DNS server → `192.168.30.11`
+- **Router admin** → DHCP settings → DNS server → `YOUR_SERVER_IP`
 
 Without this, clients will use the router's default DNS and won't resolve `.home.lab` names.
 
@@ -151,7 +151,7 @@ cp services/infra/nginx-proxy/.env.example services/infra/nginx-proxy/.env
 make up SERVICE=infra/nginx-proxy
 ```
 
-First-time login: `http://192.168.30.11:81`
+First-time login: `http://YOUR_SERVER_IP:81`
 Default credentials: `admin@example.com` / `changeme` (you'll change these immediately).
 
 ### Port Conflict Resolution
@@ -165,7 +165,7 @@ ports:
   - "53:53/udp"
   - "8053:80/tcp"    # Changed from 80 to 8053
 ```
-Pi-hole admin will now be at `http://192.168.30.11:8053/admin`.
+Pi-hole admin will now be at `http://YOUR_SERVER_IP:8053/admin`.
 
 **ntfy:** Change ntfy's port in its `.env`:
 ```bash
@@ -179,28 +179,28 @@ Now only NPM binds to port 80/443.
 
 For each service, add a **Proxy Host** in the NPM admin UI:
 
-1. Go to `http://192.168.30.11:81` → **Hosts** → **Proxy Hosts** → **Add Proxy Host**
+1. Go to `http://YOUR_SERVER_IP:81` → **Hosts** → **Proxy Hosts** → **Add Proxy Host**
 
 2. Configure each service:
 
 | Domain Name                     | Scheme | Forward Host      | Forward Port | Websockets | Notes                    |
 |---------------------------------|--------|-------------------|--------------|------------|--------------------------|
-| `opentranscribe.home.lab`       | http   | `192.168.30.11`   | `5173`       | Yes        | Frontend                 |
-| `openspeakers.home.lab`         | http   | `192.168.30.11`   | `5283`       | Yes        | Frontend                 |
-| `openaudio.home.lab`            | http   | `192.168.30.11`   | `5473`       | Yes        | Frontend                 |
-| `immich.home.lab`               | http   | `192.168.30.11`   | `2283`       | Yes        | Photo management         |
-| `plex.home.lab`                 | http   | `192.168.30.11`   | `32400`      | Yes        | Media server             |
-| `heimdall.home.lab`             | http   | `192.168.30.11`   | `9000`       | No         | Dashboard                |
-| `openwebui.home.lab`            | http   | `192.168.30.11`   | `8010`       | Yes        | LLM chat — needs WS     |
-| `tandoor.home.lab`              | http   | `192.168.30.11`   | `9092`       | No         | Recipes                  |
-| `homebox.home.lab`              | http   | `192.168.30.11`   | `3100`       | No         | Inventory                |
-| `stirling.home.lab`             | http   | `192.168.30.11`   | `8080`       | No         | PDF tools                |
-| `drawio.home.lab`               | http   | `192.168.30.11`   | `8081`       | Yes        | Diagrams                 |
-| `ntfy.home.lab`                 | http   | `192.168.30.11`   | `8180`       | Yes        | Notifications — needs WS |
-| `portainer.home.lab`            | http   | `192.168.30.11`   | `9444`       | Yes        | Docker management        |
-| `grafana.home.lab`              | http   | `192.168.30.11`   | `3002`       | Yes        | Metrics                  |
-| `uptimekuma.home.lab`           | http   | `192.168.30.11`   | `3001`       | Yes        | Uptime monitoring        |
-| `npm.home.lab`                  | http   | `192.168.30.11`   | `81`         | No         | NPM admin itself         |
+| `opentranscribe.home.lab`       | http   | `YOUR_SERVER_IP`   | `5173`       | Yes        | Frontend                 |
+| `openspeakers.home.lab`         | http   | `YOUR_SERVER_IP`   | `5283`       | Yes        | Frontend                 |
+| `openaudio.home.lab`            | http   | `YOUR_SERVER_IP`   | `5473`       | Yes        | Frontend                 |
+| `immich.home.lab`               | http   | `YOUR_SERVER_IP`   | `2283`       | Yes        | Photo management         |
+| `plex.home.lab`                 | http   | `YOUR_SERVER_IP`   | `32400`      | Yes        | Media server             |
+| `heimdall.home.lab`             | http   | `YOUR_SERVER_IP`   | `9000`       | No         | Dashboard                |
+| `openwebui.home.lab`            | http   | `YOUR_SERVER_IP`   | `8010`       | Yes        | LLM chat — needs WS     |
+| `tandoor.home.lab`              | http   | `YOUR_SERVER_IP`   | `9092`       | No         | Recipes                  |
+| `homebox.home.lab`              | http   | `YOUR_SERVER_IP`   | `3100`       | No         | Inventory                |
+| `stirling.home.lab`             | http   | `YOUR_SERVER_IP`   | `8080`       | No         | PDF tools                |
+| `drawio.home.lab`               | http   | `YOUR_SERVER_IP`   | `8081`       | Yes        | Diagrams                 |
+| `ntfy.home.lab`                 | http   | `YOUR_SERVER_IP`   | `8180`       | Yes        | Notifications — needs WS |
+| `portainer.home.lab`            | http   | `YOUR_SERVER_IP`   | `9444`       | Yes        | Docker management        |
+| `grafana.home.lab`              | http   | `YOUR_SERVER_IP`   | `3002`       | Yes        | Metrics                  |
+| `uptimekuma.home.lab`           | http   | `YOUR_SERVER_IP`   | `3001`       | Yes        | Uptime monitoring        |
+| `npm.home.lab`                  | http   | `YOUR_SERVER_IP`   | `81`         | No         | NPM admin itself         |
 
 3. For each entry:
    - **Details tab:** Enter the domain name, scheme, forward hostname/IP, and port
@@ -213,7 +213,7 @@ For each service, add a **Proxy Host** in the NPM admin UI:
 After adding the proxy hosts, from any device on your network:
 
 ```bash
-curl -H "Host: opentranscribe.home.lab" http://192.168.30.11
+curl -H "Host: opentranscribe.home.lab" http://YOUR_SERVER_IP
 # Should return the OpenTranscribe frontend HTML
 
 # Or simply open in a browser:
@@ -400,7 +400,7 @@ If you need API endpoints accessible without the Access login (e.g., ntfy push e
 
 ### One-Time Setup
 
-- [ ] Set router DNS to `192.168.30.11` (Pi-hole)
+- [ ] Set router DNS to `YOUR_SERVER_IP` (Pi-hole)
 - [ ] Change Pi-hole web port from 80 to 8053
 - [ ] Change ntfy port from 80 to 8180
 - [ ] Deploy Nginx Proxy Manager on port 80/443
@@ -411,8 +411,8 @@ If you need API endpoints accessible without the Access login (e.g., ntfy push e
 
 For each service you want to expose:
 
-- [ ] Add Pi-hole Local DNS record (`service.home.lab` → `192.168.30.11`)
-- [ ] Add NPM Proxy Host (`service.home.lab` → `192.168.30.11:PORT`)
+- [ ] Add Pi-hole Local DNS record (`service.home.lab` → `YOUR_SERVER_IP`)
+- [ ] Add NPM Proxy Host (`service.home.lab` → `YOUR_SERVER_IP:PORT`)
 - [ ] Add Cloudflare Tunnel public hostname (`service.yourdomain.us` → `localhost:PORT`)
 - [ ] Add Cloudflare Access policy (if needed)
 
@@ -437,12 +437,12 @@ For each service you want to expose:
    scutil --dns | grep nameserver
    # Linux
    cat /etc/resolv.conf
-   # Should show 192.168.30.11
+   # Should show YOUR_SERVER_IP
    ```
 
 2. Check the record exists in Pi-hole:
    ```bash
-   dig opentranscribe.home.lab @192.168.30.11
+   dig opentranscribe.home.lab @YOUR_SERVER_IP
    ```
 
 3. If your router doesn't support setting a custom DNS server, configure it per-device in network settings.
@@ -458,7 +458,7 @@ For each service you want to expose:
 
 2. Verify the port is accessible:
    ```bash
-   curl http://192.168.30.11:5173
+   curl http://YOUR_SERVER_IP:5173
    ```
 
 3. In NPM, check the proxy host: make sure the scheme (http vs https), IP, and port are correct.

@@ -28,7 +28,7 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
     # cloudflared needs access to the host network to reach services on
-    # 192.168.30.11:PORT. Using network_mode: host is the simplest approach.
+    # YOUR_SERVER_IP:PORT. Using network_mode: host is the simplest approach.
     # If you prefer bridge networking, use the homelab network and reference
     # container names instead of localhost in your tunnel config.
     network_mode: host
