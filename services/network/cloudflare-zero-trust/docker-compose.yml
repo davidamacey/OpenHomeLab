@@ -1,0 +1,78 @@
+# ===========================================================================
+# Cloudflare Zero Trust — WARP Connector (private network access)
+# Port: none (outbound-only to Cloudflare's network)
+# Docs: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/private-net/warp-connector/
+#
+# WHAT THIS IS (and how it differs from infra/cloudflared):
+#
+#   infra/cloudflared   = Cloudflare Tunnel: exposes specific HTTP services
+#                         to the public internet via public hostnames.
+#                         Anyone on the internet can reach immich.yourdomain.com.
+#
+#   THIS SERVICE        = WARP Connector: exposes your entire private network
+#                         to devices running the Cloudflare WARP client.
+#                         Only YOUR devices (enrolled in your Zero Trust org)
+#                         can reach 192.168.x.x addresses through it.
+#                         Works like Tailscale but via Cloudflare's network.
+#
+# USE CASE:
+#   Install Cloudflare WARP on your phone/laptop. Once connected to your
+#   Zero Trust org, you can SSH to your server by private IP, reach any
+#   homelab service on any port (not just HTTP), and use Split Tunneling
+#   to only route homelab traffic through Cloudflare.
+#
+# HOW IT COMPARES:
+#   CF Zero Trust WARP  — Cloudflare-managed mesh, Zero Trust policies,
+#                         device posture checks, identity-aware access
+#   Tailscale           — Self-managed mesh (via Tailscale infra), simpler,
+#                         faster setup, no Cloudflare dependency
+#   wg-easy             — Fully self-hosted WireGuard, needs open UDP port
+#
+# SETUP (one-time — do this before starting the container):
+#   1. Create a Zero Trust account at https://one.dash.cloudflare.com
+#      (free for up to 50 users)
+#   2. Go to Settings → WARP Client → Device enrollment policies
+#      Add a policy allowing your email address
+#   3. Go to Networks → Tunnels → Create a tunnel → Cloudflared
+#      Name it e.g. "homelab-warp-connector"
+#   4. In the tunnel, go to Private Network tab
+#      Add your LAN subnet: e.g. 192.168.1.0/24
+#   5. Enable WARP routing: Settings → WARP Client → Enable WARP to WARP
+#   6. Copy the tunnel token and add it to your .env as CF_TUNNEL_TOKEN
+#   7. make up SERVICE=network/cloudflare-zero-trust
+#   8. Install Cloudflare WARP on your devices:
+#      https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/download-warp/
+#   9. Log in to your Zero Trust org in the WARP client
+#  10. Done — you can now reach 192.168.x.x from your phone
+#
+# SPLIT TUNNELING (recommended):
+#   In Zero Trust dashboard → Settings → WARP Client → Profile settings
+#   → Split Tunnels → Exclude IPs: add your LAN subnet
+#   This routes only homelab traffic through WARP; all other internet
+#   traffic goes directly (faster, privacy-preserving).
+# ===========================================================================
+
+services:
+  cloudflare-zero-trust:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare-zero-trust
+    restart: unless-stopped
+    pull_policy: always
+    # host networking lets the connector act as a subnet router and
+    # forward packets to all LAN hosts on behalf of WARP clients.
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1             # required for subnet routing
+      - net.ipv4.conf.all.src_valid_mark=1
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    environment:
+      TZ: ${TZ:-America/New_York}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "info"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

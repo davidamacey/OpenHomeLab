@@ -140,6 +140,8 @@ These are custom-built applications with published Docker images. They require b
 |-------------------|---------------|-----|--------------------------------------------------|
 | AdGuard Home      | 3080/5353     | -   | Network-wide DNS ad and tracker blocking         |
 | wg-easy           | 51821/51820   | -   | WireGuard VPN with a simple web UI               |
+| Tailscale         | -             | -   | Zero-config mesh VPN and subnet router (no port forwarding needed) |
+| Cloudflare Zero Trust | -         | -   | WARP Connector — private LAN access for WARP clients via Cloudflare |
 | Speedtest Tracker | 7900          | -   | Scheduled internet speed monitoring with history |
 
 ### Dev Tools (`services/dev/`)
@@ -250,6 +252,8 @@ OpenHomeLab/
 │   ├── network/
 │   │   ├── adguard-home/         # DNS ad and tracker blocking
 │   │   ├── wg-easy/              # WireGuard VPN with web UI
+│   │   ├── tailscale/            # Mesh VPN subnet router (no port forwarding)
+│   │   ├── cloudflare-zero-trust/ # WARP connector for private LAN access
 │   │   └── speedtest-tracker/    # Scheduled internet speed monitoring
 │   ├── dev/
 │   │   ├── gitea/                # Self-hosted Git service

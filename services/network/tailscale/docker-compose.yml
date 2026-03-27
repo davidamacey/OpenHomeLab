@@ -1,0 +1,72 @@
+# ===========================================================================
+# Tailscale — Zero-config mesh VPN for secure remote access
+# Port: none (outbound WireGuard connections only)
+# Docs: https://tailscale.com/kb/1282/docker
+#
+# Tailscale creates a private WireGuard mesh between all your devices
+# (phone, laptop, work PC) and your homelab server. No port forwarding,
+# no static IPs, no certificate management. Every device gets a stable
+# 100.x.x.x address and a MagicDNS hostname.
+#
+# This container runs as a SUBNET ROUTER, which means it exposes your
+# entire homelab LAN (e.g. 192.168.1.0/24) to all your Tailscale devices.
+# You can reach any service by LAN IP or by the server's Tailscale hostname.
+#
+# How it compares to alternatives:
+#   Tailscale       — mesh VPN, no firewall changes, best for personal devices
+#   wg-easy         — self-hosted WireGuard, more control, needs port forwarding
+#   Cloudflare Tunnel — HTTP only (no raw TCP/UDP), browser-focused access
+#   CF Zero Trust   — WARP connector, same mesh concept but via Cloudflare
+#
+# Quick start:
+#   1. Create a free Tailscale account at https://login.tailscale.com
+#   2. Generate an auth key: Admin Console → Settings → Keys → Auth keys
+#      Check "Reusable" so the container can re-authenticate after restart.
+#   3. cp .env.example .env  and fill in TS_AUTHKEY and TS_ROUTES
+#   4. make up SERVICE=network/tailscale
+#   5. In Tailscale Admin Console → Machines, approve the new "homelab" device
+#   6. Enable subnet routes: click the machine → "..." → Edit route settings
+#      Toggle on the advertised subnet route
+#   7. Optionally enable as exit node for internet routing through the server
+#
+# After setup, from any device in your Tailnet:
+#   ssh user@homelab                    # SSH via MagicDNS hostname
+#   http://100.x.x.x:8096             # Jellyfin via Tailscale IP
+#   http://homelab.tail1234.ts.net:8096 # Jellyfin via MagicDNS FQDN
+# ===========================================================================
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    hostname: ${TS_HOSTNAME:-homelab}
+    restart: unless-stopped
+    pull_policy: always
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # host networking gives the subnet router access to all LAN interfaces
+    # and lets it advertise routes on behalf of the entire server.
+    network_mode: host
+    environment:
+      TZ: ${TZ:-America/New_York}
+      TS_AUTHKEY: ${TS_AUTHKEY}               # REQUIRED — from Tailscale admin console
+      TS_HOSTNAME: ${TS_HOSTNAME:-homelab}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"                   # kernel-mode WireGuard (faster, requires NET_ADMIN)
+      TS_ACCEPT_DNS: "true"                   # use Tailscale MagicDNS
+      # Advertise your homelab LAN as a subnet route (adjust to your subnet).
+      # After startup, approve the route in the Tailscale Admin Console.
+      TS_ROUTES: ${TS_ROUTES:-192.168.1.0/24}
+      # Uncomment to also advertise this server as a Tailscale exit node
+      # (routes all internet traffic from other devices through this server):
+      # TS_EXTRA_ARGS: --advertise-exit-node
+    volumes:
+      - ${DATA_PATH:-/mnt/nas/appdata}/tailscale/state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun              # kernel TUN device for WireGuard
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
